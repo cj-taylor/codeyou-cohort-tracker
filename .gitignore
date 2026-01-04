@@ -1,0 +1,24 @@
+# Rust
+/target/
+Cargo.lock
+
+# Database files
+*.db
+*.db-*
+
+# Configuration files (contain credentials)
+.cohort-tracker.toml
+cohort-tracker.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
