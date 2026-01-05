@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::openclass::{LoginRequest, LoginRequestAlt, ProgressionResponse};
+use crate::openclass::ProgressionResponse;
 use crate::db::Database;
 use anyhow::{anyhow, Result};
 use reqwest::Client;

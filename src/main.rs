@@ -1,8 +1,9 @@
-mod config;
-mod openclass;
-mod db;
-mod sync;
+mod api;
 mod cli;
+mod config;
+mod db;
+mod openclass;
+mod sync;
 
 use anyhow::Result;
 use clap::Parser;
@@ -27,6 +28,12 @@ async fn main() -> Result<()> {
         }
         cli::Commands::Status => {
             cli::handle_status(cli.config).await?;
+        }
+        cli::Commands::Server { port } => {
+            cli::handle_server(cli.config, port).await?;
+        }
+        cli::Commands::Import { students, mentors } => {
+            cli::handle_import(students, mentors).await?;
         }
     }
 

@@ -58,15 +58,3 @@ pub struct Metadata {
     pub can_load_more: bool,
 }
 
-#[derive(Debug, Serialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct LoginRequestAlt {
-    pub username: String,
-    pub password: String,
-}
-
