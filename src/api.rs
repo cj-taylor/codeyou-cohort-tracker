@@ -1,21 +1,23 @@
 use anyhow::Result;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
 use crate::config::Config;
+#[allow(unused_imports)]
 use crate::db::{
     Assignment, BlockerAssignment, CompletionMetrics, Database, Mentor, NightSummary,
-    ProgressSummary, ProgressionRecord, Student, StudentActivity, StudentHealth, WeeklyProgress,
+    ProgressSummary, ProgressionRecord, Student, StudentActivity, StudentAssignmentStatus,
+    StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
 };
 
 // Application state shared across all handlers
@@ -152,12 +154,19 @@ async fn metrics_progress_over_time(
     Ok(Json(progress))
 }
 
+// Query parameters for student activity filtering
+#[derive(Debug, Deserialize)]
+pub struct StudentActivityQuery {
+    pub night: Option<String>,
+}
+
 async fn metrics_student_activity(
     Path(_class_id): Path<String>,
+    Query(query): Query<StudentActivityQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentActivity>>, ApiError> {
     let db = state.db.lock().await;
-    let activity = db.get_student_activity()?;
+    let activity = db.get_student_activity_filtered(query.night.as_deref())?;
     Ok(Json(activity))
 }
 
@@ -187,6 +196,41 @@ async fn students_by_night(
     Ok(Json(students))
 }
 
+async fn student_detail(
+    Path((_class_id, student_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, ApiError> {
+    let db = state.db.lock().await;
+    match db.get_student_detail(&student_id)? {
+        Some(detail) => Ok((StatusCode::OK, Json(detail)).into_response()),
+        None => Ok((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Student not found".to_string(),
+            }),
+        )
+            .into_response()),
+    }
+}
+
+async fn student_assignments(
+    Path((_class_id, student_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<StudentAssignmentStatus>>, ApiError> {
+    let db = state.db.lock().await;
+    let assignments = db.get_student_assignments(&student_id)?;
+    Ok(Json(assignments))
+}
+
+async fn student_progress_timeline(
+    Path((_class_id, student_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<StudentProgressPoint>>, ApiError> {
+    let db = state.db.lock().await;
+    let timeline = db.get_student_progress_timeline(&student_id)?;
+    Ok(Json(timeline))
+}
+
 // Build the router with all routes
 fn create_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
@@ -211,6 +255,10 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route("/classes/:class_id/metrics/student-activity", get(metrics_student_activity))
         .route("/classes/:class_id/metrics/night-summary", get(metrics_night_summary))
         .route("/classes/:class_id/students/night/:night", get(students_by_night))
+        // Student detail endpoints
+        .route("/classes/:class_id/students/:student_id/detail", get(student_detail))
+        .route("/classes/:class_id/students/:student_id/assignments", get(student_assignments))
+        .route("/classes/:class_id/students/:student_id/progress-timeline", get(student_progress_timeline))
         // Mentors
         .route("/mentors", get(list_mentors))
         // Dashboard (serve index.html at root)
@@ -246,10 +294,15 @@ pub async fn start_server(config: Config, db_path: &str, port: u16) -> Result<()
     println!("  GET  /classes/{{class_id}}/metrics/blockers");
     println!("  GET  /classes/{{class_id}}/metrics/student-health");
     println!("  GET  /classes/{{class_id}}/metrics/progress-over-time");
-    println!("  GET  /classes/{{class_id}}/metrics/student-activity");
+    println!("  GET  /classes/{{class_id}}/metrics/student-activity[?night=Tues]");
     println!("  GET  /classes/{{class_id}}/metrics/night-summary");
     println!("  GET  /classes/{{class_id}}/students/night/{{night}}");
     println!("  GET  /mentors");
+    println!();
+    println!("Student detail endpoints:");
+    println!("  GET  /classes/{{class_id}}/students/{{student_id}}/detail");
+    println!("  GET  /classes/{{class_id}}/students/{{student_id}}/assignments");
+    println!("  GET  /classes/{{class_id}}/students/{{student_id}}/progress-timeline");
     println!();
     println!("Dashboard:");
     println!("  http://{}:{}/dashboard/", "localhost", port);

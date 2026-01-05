@@ -107,6 +107,7 @@ pub struct StudentActivity {
     pub first_name: String,
     pub last_name: String,
     pub email: String,
+    pub night: Option<String>,
     pub last_activity: Option<String>,
     pub days_inactive: Option<i64>,
     pub total_completions: i64,
@@ -120,6 +121,41 @@ pub struct NightSummary {
     pub avg_completion_pct: f64,
     pub avg_grade: Option<f64>,
     pub mentors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StudentDetail {
+    pub id: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub region: Option<String>,
+    pub night: Option<String>,
+    pub total_assignments: i64,
+    pub completed: i64,
+    pub completion_pct: f64,
+    pub avg_grade: Option<f64>,
+    pub risk: String,
+    pub last_activity: Option<String>,
+    pub days_inactive: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StudentAssignmentStatus {
+    pub assignment_id: String,
+    pub name: String,
+    pub assignment_type: String,
+    pub completed: bool,
+    pub grade: Option<f64>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StudentProgressPoint {
+    pub week: String,
+    pub completed: i64,
+    pub cumulative: i64,
+    pub avg_grade: Option<f64>,
 }
 
 impl Database {
@@ -579,22 +615,46 @@ impl Database {
         Ok(weekly)
     }
 
+    #[allow(dead_code)]
     pub fn get_student_activity(&self) -> Result<Vec<StudentActivity>> {
+        self.get_student_activity_filtered(None)
+    }
+
+    pub fn get_student_activity_filtered(&self, night: Option<&str>) -> Result<Vec<StudentActivity>> {
         // Get last activity date and total completions per student
-        let mut stmt = self.conn.prepare(
-            "SELECT s.id, s.first_name, s.last_name, s.email,
-                    MAX(p.completed_at) as last_activity,
-                    COUNT(p.id) as total_completions
-             FROM students s
-             LEFT JOIN progressions p ON s.id = p.student_id
-             GROUP BY s.id, s.first_name, s.last_name, s.email
-             ORDER BY last_activity ASC NULLS FIRST"
-        )?;
+        let query = match night {
+            Some(_) => {
+                "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
+                        MAX(p.completed_at) as last_activity,
+                        COUNT(p.id) as total_completions
+                 FROM students s
+                 LEFT JOIN progressions p ON s.id = p.student_id
+                 WHERE LOWER(s.night) = LOWER(?)
+                 GROUP BY s.id, s.first_name, s.last_name, s.email, s.night
+                 ORDER BY last_activity ASC NULLS FIRST"
+            }
+            None => {
+                "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
+                        MAX(p.completed_at) as last_activity,
+                        COUNT(p.id) as total_completions
+                 FROM students s
+                 LEFT JOIN progressions p ON s.id = p.student_id
+                 GROUP BY s.id, s.first_name, s.last_name, s.email, s.night
+                 ORDER BY last_activity ASC NULLS FIRST"
+            }
+        };
+
+        let mut stmt = if let Some(n) = night {
+            let stmt = self.conn.prepare(query)?;
+            stmt.bind(1, n)?
+        } else {
+            self.conn.prepare(query)?
+        };
 
         let mut activities = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
-            let last_activity: Option<String> = stmt.read::<Option<String>>(4)?;
+            let last_activity: Option<String> = stmt.read::<Option<String>>(5)?;
 
             // Calculate days inactive
             let days_inactive = if let Some(ref date_str) = last_activity {
@@ -609,9 +669,10 @@ impl Database {
                 first_name: stmt.read::<String>(1)?,
                 last_name: stmt.read::<String>(2)?,
                 email: stmt.read::<String>(3)?,
+                night: stmt.read::<Option<String>>(4)?,
                 last_activity,
                 days_inactive,
-                total_completions: stmt.read::<i64>(5)?,
+                total_completions: stmt.read::<i64>(6)?,
             });
         }
 
@@ -776,5 +837,130 @@ impl Database {
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
         Ok(count)
+    }
+
+    pub fn get_student_detail(&self, student_id: &str) -> Result<Option<StudentDetail>> {
+        let total_assignments = self.get_assignment_count()?;
+
+        let stmt = self.conn.prepare(
+            "SELECT s.id, s.first_name, s.last_name, s.email, s.region, s.night,
+                    COUNT(p.id) as completed,
+                    AVG(p.grade) as avg_grade,
+                    MAX(p.completed_at) as last_activity
+             FROM students s
+             LEFT JOIN progressions p ON s.id = p.student_id
+             WHERE s.id = ?
+             GROUP BY s.id, s.first_name, s.last_name, s.email, s.region, s.night"
+        )?;
+        let mut stmt = stmt.bind(1, student_id)?;
+
+        match stmt.next()? {
+            sqlite::State::Row => {
+                let completed = stmt.read::<i64>(6)?;
+                let avg_grade = stmt.read::<Option<f64>>(7)?;
+                let last_activity: Option<String> = stmt.read::<Option<String>>(8)?;
+
+                let completion_pct = if total_assignments > 0 {
+                    completed as f64 / total_assignments as f64
+                } else {
+                    0.0
+                };
+
+                let risk = if completion_pct < 0.25 {
+                    "critical"
+                } else if completion_pct < 0.50 {
+                    "high"
+                } else if completion_pct < 0.75 {
+                    "medium"
+                } else {
+                    "low"
+                };
+
+                let days_inactive = if let Some(ref date_str) = last_activity {
+                    self.calculate_days_since(date_str).ok()
+                } else {
+                    None
+                };
+
+                Ok(Some(StudentDetail {
+                    id: stmt.read::<String>(0)?,
+                    first_name: stmt.read::<String>(1)?,
+                    last_name: stmt.read::<String>(2)?,
+                    email: stmt.read::<String>(3)?,
+                    region: stmt.read::<Option<String>>(4)?,
+                    night: stmt.read::<Option<String>>(5)?,
+                    total_assignments,
+                    completed,
+                    completion_pct,
+                    avg_grade,
+                    risk: risk.to_string(),
+                    last_activity,
+                    days_inactive,
+                }))
+            }
+            sqlite::State::Done => Ok(None),
+        }
+    }
+
+    pub fn get_student_assignments(&self, student_id: &str) -> Result<Vec<StudentAssignmentStatus>> {
+        // Get all assignments with student's completion status
+        let stmt = self.conn.prepare(
+            "SELECT a.id, a.name, a.type,
+                    p.grade, p.completed_at,
+                    CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as completed
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND p.student_id = ?
+             ORDER BY a.name"
+        )?;
+        let mut stmt = stmt.bind(1, student_id)?;
+
+        let mut assignments = Vec::new();
+
+        while let sqlite::State::Row = stmt.next()? {
+            let completed_flag = stmt.read::<i64>(5)?;
+            assignments.push(StudentAssignmentStatus {
+                assignment_id: stmt.read::<String>(0)?,
+                name: stmt.read::<String>(1)?,
+                assignment_type: stmt.read::<String>(2)?,
+                completed: completed_flag == 1,
+                grade: stmt.read::<Option<f64>>(3)?,
+                completed_at: stmt.read::<Option<String>>(4)?,
+            });
+        }
+
+        Ok(assignments)
+    }
+
+    pub fn get_student_progress_timeline(&self, student_id: &str) -> Result<Vec<StudentProgressPoint>> {
+        // Get weekly progress for a specific student
+        let stmt = self.conn.prepare(
+            "SELECT strftime('%Y-%W', completed_at) as week,
+                    COUNT(*) as completed,
+                    AVG(grade) as avg_grade
+             FROM progressions
+             WHERE student_id = ? AND completed_at IS NOT NULL AND completed_at != ''
+             GROUP BY week
+             ORDER BY week ASC"
+        )?;
+        let mut stmt = stmt.bind(1, student_id)?;
+
+        let mut timeline = Vec::new();
+        let mut cumulative = 0i64;
+
+        while let sqlite::State::Row = stmt.next()? {
+            let week = stmt.read::<String>(0)?;
+            let completed = stmt.read::<i64>(1)?;
+            let avg_grade = stmt.read::<Option<f64>>(2)?;
+            cumulative += completed;
+
+            timeline.push(StudentProgressPoint {
+                week,
+                completed,
+                cumulative,
+                avg_grade,
+            });
+        }
+
+        Ok(timeline)
     }
 }

@@ -200,6 +200,194 @@
         .night-card .mentors strong {
             color: #333;
         }
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filters select, .filters input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+        }
+        .filters select {
+            min-width: 150px;
+        }
+        .filters input {
+            min-width: 200px;
+        }
+        .filters select:focus, .filters input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn-view {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .btn-view:hover {
+            background: #5a6fd6;
+        }
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 25px;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+        .modal-close:hover {
+            color: #333;
+        }
+        .modal-info {
+            padding: 15px 25px;
+            background: #f8fafc;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .modal-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            padding: 20px 25px;
+        }
+        .modal-stat {
+            text-align: center;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+        .modal-stat .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .modal-stat .label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        .modal-stat.success .value { color: #10b981; }
+        .modal-stat.warning .value { color: #f59e0b; }
+        .modal-stat.danger .value { color: #ef4444; }
+        .modal-section {
+            padding: 20px 25px;
+            border-top: 1px solid #eee;
+        }
+        .modal-section h3 {
+            margin: 0 0 15px 0;
+            font-size: 1rem;
+            color: #333;
+        }
+        #problem-areas {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .problem-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: #fef3c7;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        .problem-item.incomplete {
+            background: #fee2e2;
+        }
+        .problem-item.low-grade {
+            background: #fef3c7;
+        }
+        .assignment-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .assignment-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .assignment-item:last-child {
+            border-bottom: none;
+        }
+        .assignment-name {
+            flex: 1;
+        }
+        .assignment-type {
+            font-size: 0.75rem;
+            color: #666;
+            background: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .assignment-status {
+            width: 100px;
+            text-align: center;
+        }
+        .status-done {
+            color: #10b981;
+        }
+        .status-missing {
+            color: #ef4444;
+        }
+        .status-low {
+            color: #f59e0b;
+        }
+        .assignment-grade {
+            width: 60px;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -270,20 +458,57 @@
 
         <div class="section">
             <h2>Student Activity</h2>
-            <p style="color:#666; font-size:0.9rem; margin-bottom:15px;">Last activity date for each student (sorted by least recent)</p>
+            <p style="color:#666; font-size:0.9rem; margin-bottom:15px;">Last activity date for each student (sorted by least recent). Click a student to view details.</p>
+            <div class="filters">
+                <select id="night-filter" onchange="loadStudentActivity()">
+                    <option value="">All Nights</option>
+                    <option value="Tues">Tuesday</option>
+                    <option value="Wed">Wednesday</option>
+                    <option value="Thurs">Thursday</option>
+                </select>
+                <input type="text" id="student-search" placeholder="Search student..." oninput="filterStudentTable()">
+            </div>
             <table id="activity-table">
                 <thead>
                     <tr>
                         <th>Student</th>
+                        <th>Night</th>
                         <th>Last Activity</th>
                         <th>Days Inactive</th>
                         <th>Completions</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="activity-body">
-                    <tr><td colspan="4" class="loading">Loading...</td></tr>
+                    <tr><td colspan="6" class="loading">Loading...</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Student Detail Modal -->
+        <div id="student-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-student-name">Student Details</h2>
+                    <button class="modal-close" onclick="closeStudentModal()">&times;</button>
+                </div>
+                <div id="modal-student-info" class="modal-info"></div>
+                <div class="modal-stats" id="modal-stats"></div>
+                <div class="modal-section">
+                    <h3>Progress Over Time</h3>
+                    <div class="chart-container" style="height:200px;">
+                        <canvas id="student-progress-chart"></canvas>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <h3>Problem Areas</h3>
+                    <div id="problem-areas"></div>
+                </div>
+                <div class="modal-section">
+                    <h3>All Assignments</h3>
+                    <div class="assignment-list" id="assignment-list"></div>
+                </div>
+            </div>
         </div>
 
         <div class="section">
@@ -404,12 +629,46 @@
             `).join('');
         }
 
+        // Store student data for search filtering
+        let studentActivityData = [];
+
         async function loadStudentActivity() {
-            const data = await fetchData(`/classes/${CLASS_ID}/metrics/student-activity`);
+            const nightFilter = document.getElementById('night-filter').value;
+            const endpoint = nightFilter
+                ? `/classes/${CLASS_ID}/metrics/student-activity?night=${nightFilter}`
+                : `/classes/${CLASS_ID}/metrics/student-activity`;
+
+            const data = await fetchData(endpoint);
             const tbody = document.getElementById('activity-body');
 
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">No data available</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6">No data available</td></tr>';
+                studentActivityData = [];
+                return;
+            }
+
+            studentActivityData = data;
+            renderStudentActivityTable(data);
+        }
+
+        function filterStudentTable() {
+            const searchTerm = document.getElementById('student-search').value.toLowerCase();
+            if (!searchTerm) {
+                renderStudentActivityTable(studentActivityData);
+                return;
+            }
+            const filtered = studentActivityData.filter(s =>
+                `${s.first_name} ${s.last_name}`.toLowerCase().includes(searchTerm) ||
+                s.email.toLowerCase().includes(searchTerm)
+            );
+            renderStudentActivityTable(filtered);
+        }
+
+        function renderStudentActivityTable(data) {
+            const tbody = document.getElementById('activity-body');
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">No students found</td></tr>';
                 return;
             }
 
@@ -445,6 +704,7 @@
                         <div>${student.first_name} ${student.last_name}</div>
                         <div style="font-size:0.8rem; color:#666;">${student.email}</div>
                     </td>
+                    <td>${student.night || '-'}</td>
                     <td>${formatActivityDate(student.last_activity)}</td>
                     <td>
                         <span class="activity-badge ${getActivityClass(student.days_inactive)}">
@@ -452,9 +712,165 @@
                         </span>
                     </td>
                     <td>${student.total_completions}</td>
+                    <td>
+                        <button class="btn-view" onclick="openStudentModal('${student.student_id}')">View</button>
+                    </td>
                 </tr>
             `).join('');
         }
+
+        // Student Modal Functions
+        let studentProgressChart = null;
+
+        async function openStudentModal(studentId) {
+            const modal = document.getElementById('student-modal');
+            modal.style.display = 'flex';
+
+            // Load student detail
+            const detail = await fetchData(`/classes/${CLASS_ID}/students/${studentId}/detail`);
+            if (!detail) {
+                alert('Failed to load student details');
+                closeStudentModal();
+                return;
+            }
+
+            // Update header
+            document.getElementById('modal-student-name').textContent =
+                `${detail.first_name} ${detail.last_name}`;
+
+            // Update info
+            document.getElementById('modal-student-info').innerHTML =
+                `${detail.email} | ${detail.night || 'No night assigned'} Night | ${detail.region || 'No region'}`;
+
+            // Update stats
+            const riskClass = detail.risk === 'low' ? 'success' :
+                              detail.risk === 'medium' ? 'warning' : 'danger';
+            document.getElementById('modal-stats').innerHTML = `
+                <div class="modal-stat">
+                    <div class="value">${formatPercent(detail.completion_pct)}</div>
+                    <div class="label">Completion</div>
+                </div>
+                <div class="modal-stat ${detail.avg_grade && detail.avg_grade >= 0.7 ? 'success' : 'warning'}">
+                    <div class="value">${detail.avg_grade ? formatPercent(detail.avg_grade) : 'N/A'}</div>
+                    <div class="label">Avg Grade</div>
+                </div>
+                <div class="modal-stat ${detail.days_inactive <= 7 ? 'success' : detail.days_inactive <= 14 ? 'warning' : 'danger'}">
+                    <div class="value">${detail.days_inactive !== null ? detail.days_inactive + 'd' : '-'}</div>
+                    <div class="label">Days Inactive</div>
+                </div>
+                <div class="modal-stat ${riskClass}">
+                    <div class="value">${detail.risk.toUpperCase()}</div>
+                    <div class="label">Risk Level</div>
+                </div>
+            `;
+
+            // Load assignments and timeline in parallel
+            const [assignments, timeline] = await Promise.all([
+                fetchData(`/classes/${CLASS_ID}/students/${studentId}/assignments`),
+                fetchData(`/classes/${CLASS_ID}/students/${studentId}/progress-timeline`)
+            ]);
+
+            // Render problem areas
+            if (assignments) {
+                const incomplete = assignments.filter(a => !a.completed);
+                const lowGrade = assignments.filter(a => a.completed && a.grade && a.grade < 0.7);
+
+                const problemAreas = document.getElementById('problem-areas');
+                if (incomplete.length === 0 && lowGrade.length === 0) {
+                    problemAreas.innerHTML = '<p style="color:#16a34a;">No problem areas identified!</p>';
+                } else {
+                    let html = '';
+                    incomplete.slice(0, 5).forEach(a => {
+                        html += `<div class="problem-item incomplete">Not completed: ${a.name}</div>`;
+                    });
+                    lowGrade.slice(0, 5).forEach(a => {
+                        html += `<div class="problem-item low-grade">Low grade (${formatPercent(a.grade)}): ${a.name}</div>`;
+                    });
+                    if (incomplete.length > 5) {
+                        html += `<div style="color:#666; font-size:0.85rem;">...and ${incomplete.length - 5} more incomplete</div>`;
+                    }
+                    problemAreas.innerHTML = html;
+                }
+
+                // Render assignment list
+                const assignmentList = document.getElementById('assignment-list');
+                assignmentList.innerHTML = assignments.map(a => {
+                    let statusClass, statusText;
+                    if (!a.completed) {
+                        statusClass = 'status-missing';
+                        statusText = 'Missing';
+                    } else if (a.grade && a.grade < 0.7) {
+                        statusClass = 'status-low';
+                        statusText = 'Low';
+                    } else {
+                        statusClass = 'status-done';
+                        statusText = 'Done';
+                    }
+                    return `
+                        <div class="assignment-item">
+                            <span class="assignment-name">${a.name}<span class="assignment-type">${a.assignment_type}</span></span>
+                            <span class="assignment-status ${statusClass}">${statusText}</span>
+                            <span class="assignment-grade">${a.grade ? formatPercent(a.grade) : '-'}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Render progress chart
+            if (timeline && timeline.length > 0) {
+                const ctx = document.getElementById('student-progress-chart').getContext('2d');
+
+                // Destroy existing chart if any
+                if (studentProgressChart) {
+                    studentProgressChart.destroy();
+                }
+
+                studentProgressChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: timeline.map(d => {
+                            const [year, week] = d.week.split('-');
+                            return `W${parseInt(week)}`;
+                        }),
+                        datasets: [
+                            {
+                                label: 'Cumulative Completions',
+                                data: timeline.map(d => d.cumulative),
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                fill: true,
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        function closeStudentModal() {
+            document.getElementById('student-modal').style.display = 'none';
+            if (studentProgressChart) {
+                studentProgressChart.destroy();
+                studentProgressChart = null;
+            }
+        }
+
+        // Close modal on outside click
+        document.getElementById('student-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeStudentModal();
+            }
+        });
 
         async function loadProgressChart() {
             const data = await fetchData(`/classes/${CLASS_ID}/metrics/progress-over-time`);
