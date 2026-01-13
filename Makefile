@@ -1,4 +1,4 @@
-.PHONY: build release test test-unit test-integration test-verbose clean init sync status help
+.PHONY: build release test test-unit test-integration test-verbose clean init sync status serve help
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  init      - Initialize configuration (requires EMAIL, PASSWORD, CLASS_ID)"
 	@echo "  sync      - Sync data from OpenClass"
 	@echo "  status    - Show database status"
+	@echo "  serve     - Start server and open dashboard in browser"
 
 # Build commands
 build:
@@ -51,3 +52,8 @@ sync:
 
 status:
 	cargo run -- status
+
+serve:
+	@echo "Starting server on http://localhost:3000/dashboard/"
+	@(sleep 2 && open http://localhost:3000/dashboard/) &
+	cargo run -- server

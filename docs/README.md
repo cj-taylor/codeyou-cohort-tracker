@@ -1,6 +1,6 @@
 # Cohort Tracker Documentation
 
-Hey there! This is the documentation for Cohort Tracker, a Rust project that helps coding bootcamp mentors keep tabs on student progress from OpenClass.ai.
+Howdy, folks! This is the documentation for Cohort Tracker, a Rust project that helps mentors keep tabs on student progress from OpenClass.ai.
 
 ## What's in here
 
@@ -10,14 +10,15 @@ Hey there! This is the documentation for Cohort Tracker, a Rust project that hel
 - [**API Integration**](./openclass-api.md) - How we talk to OpenClass
 - [**Database Design**](./database.md) - Our SQLite setup and queries
 - [**Development Guide**](./development.md) - Want to contribute? This is your guide
+- [**Roadmap**](./roadmap.md) - Ideas for where to take this next
 
 ## Quick Overview
 
-This thing pulls student data from OpenClass.ai, saves it to a local SQLite database, and gives you CLI tools to analyze it. We're building it in three phases:
+This thing pulls student data from OpenClass.ai, saves it to a local SQLite database, and gives you a REST API to query it. All three phases are done:
 
-1. **Phase 1 (Done)**: CLI sync tool
-2. **Phase 2 (Coming)**: REST API server
-3. **Phase 3 (Future)**: Analytics and metrics
+1. CLI sync tool
+2. REST API server
+3. Analytics endpoints
 
 ## If you're new to Rust
 
@@ -29,6 +30,6 @@ I'd suggest reading these in order:
 
 ## Need help?
 
-- Main setup instructions are in the [README.md](../README.md)
-- Hit a wall? Check the [Troubleshooting](../README.md#troubleshooting) section
-- The source code has comments explaining the tricky bits
+- Setup instructions are in the [README](../README.md)
+- Source code has comments explaining the tricky bits
+- Check the [Roadmap](./roadmap.md) if you're looking for what to work on next
