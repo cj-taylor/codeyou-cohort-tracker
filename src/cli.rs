@@ -16,34 +16,22 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize configuration
     Init {
-        /// Email for OpenClass login
         #[arg(short, long)]
         email: String,
-
-        /// Password for OpenClass login
         #[arg(short, long)]
         password: String,
-
-        /// Class ID to track
         #[arg(long)]
         class_id: String,
-
         /// API base URL (default: https://api.openclass.ai)
         #[arg(short, long, default_value = "https://api.openclass.ai")]
         api_base: String,
     },
 
-    /// Sync data from OpenClass
     Sync,
-
-    /// Show status and stats
     Status,
 
-    /// Start the REST API server
     Server {
-        /// Port to listen on
         #[arg(short, long, default_value = "3000")]
         port: u16,
     },
@@ -53,7 +41,6 @@ pub enum Commands {
         /// Path to students CSV (columns: First Name, Last Name, Region, Night)
         #[arg(long)]
         students: Option<String>,
-
         /// Path to mentors CSV (columns: Mentor Name, Night)
         #[arg(long)]
         mentors: Option<String>,
@@ -183,6 +170,7 @@ pub async fn handle_import(students_path: Option<String>, mentors_path: Option<S
                 continue;
             }
 
+            // TODO: use a proper CSV parser instead of split(',')
             let fields: Vec<&str> = line.split(',').collect();
             if fields.len() >= 4 {
                 let first_name = fields[0].trim();

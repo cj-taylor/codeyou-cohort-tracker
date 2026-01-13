@@ -175,6 +175,7 @@ impl Database {
         )?;
 
         // Add columns if they don't exist (for migration)
+        // FIXME: proper migrations would be better than this hack
         let _ = conn.execute("ALTER TABLE students ADD COLUMN region TEXT");
         let _ = conn.execute("ALTER TABLE students ADD COLUMN night TEXT");
 

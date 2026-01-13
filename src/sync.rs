@@ -29,6 +29,7 @@ impl OpenClassClient {
         let url = format!("{}/v1/auth/login", self.config.api_base);
         println!("Attempting to authenticate with URL: {}", url);
         
+        // TODO: move these headers to a config or constant
         let form_data = format!(
             "email={}&password={}&invite_code=&instructor_invite_code=&mentor_invite_code=",
             urlencoding::encode(&self.config.email),
@@ -41,6 +42,7 @@ impl OpenClassClient {
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Accept", "*/*")
             .header("Origin", "https://classroom.code-you.org")
+            // FIXME: this should probably be configurable or at least not hardcoded
             .header("X-OpenClass-App-Id", "38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0")
             .body(form_data)
             .send()
@@ -94,6 +96,7 @@ impl OpenClassClient {
             .header("Content-Type", "application/json; charset=ISO-8859-1")
             .header("Accept", "*/*")
             .header("Origin", "https://classroom.code-you.org")
+            // TODO: same hardcoded app ID as above
             .header("X-OpenClass-App-Id", "38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0")
             .send()
             .await?;
@@ -113,6 +116,7 @@ impl OpenClassClient {
         // Parse the outer response
         let outer_json: serde_json::Value = serde_json::from_str(&text)?;
         
+        // FIXME: this API design is bonkers - they wrap JSON in JSON strings
         // Extract the inner JSON string from result.objects[0]
         let inner_json_str = outer_json
             .get("result")
@@ -197,6 +201,7 @@ impl OpenClassClient {
             stats.pages_fetched += 1;
             page += 1;
 
+            // TODO: make this configurable
             // Be nice to the API
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
