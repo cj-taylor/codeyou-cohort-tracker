@@ -232,6 +232,22 @@ Cohort Tracker uses the OpenClass API to fetch student progression data:
 }
 ```
 
+### Running Tests
+
+```bash
+cargo test
+```
+
+### Test Coverage
+
+The project includes comprehensive tests:
+
+- **Unit tests**: Config, database, and API type tests
+- **Integration tests**: Full sync workflow with mocked APIs
+- **Error handling**: Network failures and edge cases
+
+See [Testing Documentation](./docs/testing.md) for details.
+
 ## Building & Running
 
 ### Development Build
