@@ -2,87 +2,147 @@
 
 Pulls student progress data from OpenClass.ai and stores it locally. Built in Rust.
 
-## ⚠️ Breaking Changes - Multi-Class Support
-
-**If upgrading from a previous version:**
-
-The application now supports multiple classes! This requires a fresh setup:
-
-1. **Backup your data** (optional):
-   ```bash
-   cp ~/.cohort-tracker.db ~/.cohort-tracker.db.backup
-   cp ~/.cohort-tracker.toml ~/.cohort-tracker.toml.backup
-   ```
-
-2. **Remove old config and database**:
-   ```bash
-   rm ~/.cohort-tracker.toml
-   rm ~/.cohort-tracker.db
-   ```
-
-3. **Re-initialize with new workflow**:
-   ```bash
-   cargo run -- init --email your@email.com --password yourpass
-   # Follow the interactive prompts to select which classes to track
-   ```
-
-4. **Sync your data**:
-   ```bash
-   cargo run -- sync
-   ```
+Track your students' progress, identify who's struggling, and see where they get stuck - all from your own local database.
 
 ---
 
-## Getting started
+## Quick Start
 
-You'll need Rust 1.80+ installed. If you don't have it, grab it from [rustup.rs](https://rustup.rs/).
+**New here?** Check out the [Getting Started Guide](./docs/getting-started.md) for a detailed walkthrough.
+
+**Already know what you're doing?** Here's the speed run:
 
 ```bash
+# Install Rust from https://rustup.rs if you haven't already
+
+# Build it
 cargo build --release
 
-# Initialize with your OpenClass credentials
+# Set up your credentials and select classes to track
 cargo run -- init --email you@example.com --password your-password
 
-# The init command will:
-# 1. Save your credentials
-# 2. Fetch all classes you have access to
-# 3. Let you select which classes to track (active vs inactive)
-
-# Pull down all the data for active classes
+# Fetch the data
 cargo run -- sync
 
-# See what you've got
+# Start the dashboard
+make serve
+```
+
+Open http://localhost:3000 and you're off to the races.
+
+## What You Get
+
+- **📊 Dashboard** - Visual overview of student progress, completion rates, and risk levels
+- **🔍 Analytics** - Identify struggling students and blocker assignments
+- **🗄️ Local Database** - All your data in SQLite, query it however you want
+- **🚀 REST API** - Build your own tools on top of the data
+- **⚡ Fast Sync** - Incremental updates, only fetches what's new
+
+## Daily Usage
+
+```bash
+# Sync new data (run this daily or before checking the dashboard)
+cargo run -- sync
+
+# Check status
 cargo run -- status
+
+# Start the dashboard
+make serve
+```
+
+## Common Commands
+
+```bash
+# Sync specific class
+cargo run -- sync --class data-analysis-pathway-module-2-aug-2
+
+# Force full refresh (fetches everything)
+cargo run -- sync --full
 
 # List all classes
 cargo run -- list
 
 # Activate/deactivate classes
 cargo run -- activate data-analysis-pathway-module-1-aug-2
-cargo run -- deactivate data-analysis-pathway-module-3-may25
-
-# Start the dashboard
-make serve
+cargo run -- deactivate old-class-name
 ```
 
-The `sync` command grabs everything from OpenClass and saves it to a local SQLite database. First sync takes a minute or two depending on how many students and classes you have.
+## Documentation
 
-`make serve` starts the API server and opens the dashboard in your browser.
+**Start here:**
+- 👋 [Getting Started](./docs/getting-started.md) - Detailed setup and usage guide
+- 🏗️ [Architecture](./docs/architecture.md) - How the code is organized
+- 🦀 [Rust Basics](./docs/rust-basics.md) - Rust concepts used in this project
 
-## Docs
+**Dive deeper:**
+- [Database Schema](./docs/database.md) - What data we store and how to query it
+- [Development Guide](./docs/development.md) - Contributing and making changes
+- [OpenClass API](./docs/openclass-api.md) - Understanding the data source
+- [Testing](./docs/testing.md) - How to write and run tests
+- [Why Rust?](./docs/why-rust.md) - Our technology decisions
+- [Roadmap](./docs/roadmap.md) - Future ideas
 
-All the details live in [docs/](./docs/README.md):
+**Full index:** [docs/README.md](./docs/README.md)
 
-- [Rust basics](./docs/rust-basics.md) if you're new to the language
-- [Architecture](./docs/architecture.md) for how the code is organized
-- [Database](./docs/database.md) for the schema
-- [OpenClass API](./docs/openclass-api.md) for how we talk to their backend
-- [Development](./docs/development.md) for contributing
-- [Testing](./docs/testing.md) for the test suite
-- [Roadmap](./docs/roadmap.md) for what could come next
+## How It Works
 
-## Status
+1. **Sync** - Fetches student progress from OpenClass API
+2. **Store** - Saves to local SQLite database (`~/.cohort-tracker.db`)
+3. **Serve** - REST API provides data to the dashboard
+4. **Visualize** - Dashboard shows progress, blockers, and risk levels
 
-- [x] CLI + sync
-- [x] REST API
-- [x] Analytics endpoints
+The sync is incremental by default - it only fetches new data. First sync takes a couple minutes, subsequent syncs are much faster.
+
+## Project Structure
+
+```
+src/
+├── models.rs        # Data structures (Class, Student, Assignment)
+├── cli.rs           # Command-line interface
+├── api.rs           # REST API server
+├── db/              # Database layer (queries + analytics)
+├── lms/             # LMS provider abstraction
+│   └── openclass/   # OpenClass implementation
+└── sync/            # Sync engine
+```
+
+See [Architecture](./docs/architecture.md) for the full picture.
+
+## Requirements
+
+- Rust 1.80+ ([install from rustup.rs](https://rustup.rs/))
+- OpenClass instructor/mentor account
+- Access to at least one class
+
+## Features
+
+- ✅ Multi-class support
+- ✅ Incremental sync (fast updates)
+- ✅ Full sync option (complete refresh)
+- ✅ Student progress tracking
+- ✅ Risk level identification
+- ✅ Blocker assignment detection
+- ✅ Activity monitoring
+- ✅ REST API
+- ✅ Interactive dashboard
+- ✅ Local SQLite database
+
+## Contributing
+
+We welcome contributions! Check out the [Development Guide](./docs/development.md) to get started.
+
+The codebase is organized to be approachable for Rust learners. Each module has a clear purpose, and we've documented the tricky bits.
+
+## License
+
+MIT
+
+## Questions?
+
+- Check the [docs/](./docs/README.md) folder
+- Look at the code - it has comments where things get interesting
+- Open an issue - we're friendly!
+
+Built with 🦀 and ❤️ for educators tracking student progress.
+

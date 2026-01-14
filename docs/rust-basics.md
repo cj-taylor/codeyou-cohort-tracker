@@ -186,19 +186,96 @@ cargo check          # Check for errors without building
 ### Common Commands in Our Project
 
 ```bash
-cargo run -- init --email user@example.com --password pass --class-id 123
+cargo run -- init --email user@example.com --password pass
 cargo run -- sync
 cargo run -- status
 ```
 
+## 9. Modules and Organization
+
+Rust uses modules to organize code. Think of them like folders for your code.
+
+```rust
+// In src/lib.rs
+pub mod models;  // Declares the models module
+pub mod db;      // Declares the db module
+
+// In src/models.rs
+pub struct Student { /* ... */ }
+
+// In another file
+use crate::models::Student;  // Import from our crate
+```
+
+**In our code:** We split large files into modules (`db/`, `lms/`, `sync/`) to keep things organized.
+
+### Re-exports
+
+Sometimes you want to make imports easier:
+
+```rust
+// In src/db/mod.rs
+mod queries;
+mod analytics;
+
+pub use queries::*;  // Re-export everything from queries
+pub use analytics::*;  // Re-export everything from analytics
+
+// Now users can do:
+use crate::db::get_students;  // Instead of crate::db::queries::get_students
+```
+
+## 10. Trait Objects (Dynamic Dispatch)
+
+Sometimes you want to work with different types through the same interface:
+
+```rust
+// Define a trait
+trait LmsProvider {
+    fn fetch_data(&self) -> Result<Vec<Data>>;
+}
+
+// Different implementations
+struct OpenClass { /* ... */ }
+struct TopHat { /* ... */ }
+
+impl LmsProvider for OpenClass { /* ... */ }
+impl LmsProvider for TopHat { /* ... */ }
+
+// Use any provider through a trait object
+let provider: Box<dyn LmsProvider> = Box::new(OpenClass::new());
+let data = provider.fetch_data()?;  // Works with any provider!
+```
+
+**In our code:** The sync engine uses `Box<dyn LmsProvider>` so it can work with OpenClass, TopHat, or any future provider.
+
+**Why `Box`?** Trait objects need to be behind a pointer because their size isn't known at compile time.
+
+**Why `dyn`?** It means "dynamic dispatch" - the actual method is chosen at runtime.
+
 ## Learning Resources
 
-- [The Rust Book](https://doc.rust-lang.org/book/) - Official tutorial
-- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) - Code examples
+- [The Rust Book](https://doc.rust-lang.org/book/) - Official tutorial (start here!)
+- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) - Learn by doing
 - [Rustlings](https://github.com/rust-lang/rustlings) - Interactive exercises
+- [Rust Playground](https://play.rust-lang.org/) - Try code in your browser
 
 ## Next Steps
 
 Once you understand these basics, check out:
+- [Getting Started](./getting-started.md) - Get the project running
 - [Project Architecture](./architecture.md) - How our code is organized
 - [Why Rust?](./why-rust.md) - Why we chose Rust for this project
+- [Development Guide](./development.md) - Make your first change
+
+## Tips for Learning Rust
+
+**The compiler is your friend.** Rust error messages are actually helpful. Read them carefully - they often tell you exactly how to fix the problem.
+
+**Start small.** Don't try to understand everything at once. Pick one file and explore.
+
+**Experiment.** Change something and see what happens. The compiler will catch errors before they become bugs.
+
+**It gets easier.** The first week is tough. The second week is better. By week three, you'll start to see why people love Rust.
+
+Welcome to the Rust community! 🦀

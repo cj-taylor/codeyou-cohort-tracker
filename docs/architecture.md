@@ -1,335 +1,325 @@
 # Project Architecture
 
-This document explains how the Cohort Tracker code is organized and how the different parts work together.
+This document explains how the Cohort Tracker code is organized and how the different parts work together. If you're new to the project, start here to get your bearings.
 
 ## Project Structure
 
 ```
 cohort-tracker/
 ├── src/
-│   ├── main.rs          # Entry point and CLI routing
-│   ├── cli.rs           # Command-line interface definitions
+│   ├── main.rs          # Entry point - routes CLI commands
+│   ├── lib.rs           # Library exports
+│   ├── models.rs        # Domain models (Class, Student, Assignment, etc.)
 │   ├── config.rs        # Configuration management
-│   ├── db.rs            # Database operations
-│   ├── openclass.rs     # OpenClass API types
-│   └── sync.rs          # API client and sync logic
-├── docs/                # Documentation (this folder)
-├── Cargo.toml          # Dependencies and project metadata
-└── README.md           # Main project documentation
+│   ├── cli.rs           # CLI command definitions and handlers
+│   ├── api.rs           # REST API server and endpoints
+│   ├── db/              # Database layer
+│   │   ├── mod.rs       # Database struct and schema
+│   │   ├── queries.rs   # CRUD operations
+│   │   └── analytics.rs # Analytics queries
+│   ├── lms/             # LMS provider abstraction
+│   │   ├── mod.rs       # LmsProvider trait
+│   │   └── openclass/   # OpenClass implementation
+│   │       ├── mod.rs   # Provider implementation
+│   │       ├── auth.rs  # Authentication
+│   │       ├── fetch.rs # API calls
+│   │       └── types.rs # OpenClass-specific types
+│   └── sync/            # Sync engine
+│       ├── mod.rs       # Module exports
+│       ├── types.rs     # SyncStats
+│       └── engine.rs    # Provider-agnostic sync logic
+├── static/              # Dashboard HTML/CSS/JS
+├── docs/                # Documentation
+├── tests/               # Integration tests
+├── Cargo.toml          # Dependencies
+└── README.md           # Quick start guide
 ```
 
-## Module Breakdown
+## Why This Structure?
 
-### `main.rs` - Application Entry Point
+We started with everything in single files (`db.rs`, `sync.rs`), but as the project grew, we split them into modules. Here's why:
 
-```rust
-#[tokio::main]
-async fn main() -> Result<()> {
-    dotenv::dotenv().ok();
-    
-    let cli = cli::Cli::parse();
+- **Easier to navigate**: Find what you need faster
+- **Clear responsibilities**: Each file has one job
+- **Better for learning**: Focus on one piece at a time
+- **Ready for growth**: Easy to add new providers or features
 
-    match cli.command {
-        cli::Commands::Init { email, password, api_base } => {
-            cli::handle_init(email, password, api_base).await?;
-        }
-        cli::Commands::List { all } => {
-            cli::handle_list(all).await?;
-        }
-        cli::Commands::Activate { friendly_ids } => {
-            cli::handle_activate(friendly_ids).await?;
-        }
-        cli::Commands::Deactivate { friendly_ids } => {
-            cli::handle_deactivate(friendly_ids).await?;
-        }
-        cli::Commands::Sync { class } => {
-            cli::handle_sync(cli.config, class).await?;
-        }
-        cli::Commands::Status => {
-            cli::handle_status(cli.config).await?;
-        }
-        // ... other commands
-    }
+## Core Concepts
 
-    Ok(())
-}
-```
+### 1. Domain Models (`models.rs`)
 
-**What it does:** Routes CLI commands to handlers. Uses `anyhow::Result` for simple error handling.
-
-### `cli.rs` - Command Line Interface
+These are the core data structures used throughout the app:
 
 ```rust
-#[derive(Parser)]
-pub struct Cli {
-    #[arg(long)]
-    pub config: Option<PathBuf>,
-    
-    #[command(subcommand)]
-    pub command: Commands,
+pub struct Class {
+    pub id: String,
+    pub name: String,
+    pub friendly_id: String,
+    pub is_active: bool,
+    pub synced_at: Option<String>,
 }
 
-#[derive(Subcommand)]
-pub enum Commands {
-    Init { email: String, password: String, api_base: String },
-    List { all: bool },
-    Activate { friendly_ids: Vec<String> },
-    Deactivate { friendly_ids: Vec<String> },
-    Sync { class: Option<String> },
-    Status,
-}
-```
-
-**Purpose:** Defines CLI structure using `clap`. Handles argument parsing and validation.
-
-### `config.rs` - Configuration Management
-
-```rust
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Config {
-    pub email: String,
-    pub password: String,
+pub struct Student {
+    pub id: String,
     pub class_id: String,
-    pub api_base: String,
-}
-
-impl Config {
-    pub fn from_file(path: &str) -> Result<Self> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| anyhow!("Failed to read config file: {}", e))?;
-        toml::from_str(&content).map_err(|e| anyhow!("Failed to parse config: {}", e))
-    }
-
-    pub fn save(&self, path: &str) -> Result<()> {
-        let content = toml::to_string_pretty(self)?;
-        fs::write(path, content)?;
-        Ok(())
-    }
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    // ...
 }
 ```
 
-**What it does:** Loads/saves config from `~/.cohort-tracker.toml`. Uses `anyhow` for error handling instead of custom error types.
+**Why at the top level?** These models are used everywhere - database, API, sync logic. Keeping them in one place makes them easy to import.
 
-### `db.rs` - Database Operations
+### 2. Database Layer (`db/`)
 
+Split into three files for clarity:
+
+**`db/mod.rs`** - Database struct and schema setup
 ```rust
 pub struct Database {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Database {
-    pub fn new() -> Result<Self, rusqlite::Error> { /* ... */ }
-    pub fn create_tables(&self) -> Result<(), rusqlite::Error> { /* ... */ }
-    pub fn insert_student(&self, student: &Student) -> Result<(), rusqlite::Error> { /* ... */ }
-    pub fn get_stats(&self) -> Result<DatabaseStats, rusqlite::Error> { /* ... */ }
+    pub fn new(path: &str) -> Result<Self> {
+        // Creates tables, runs migrations
+    }
 }
 ```
 
-**Purpose:** All SQLite database interactions. Handles schema creation, data insertion, and queries.
+**`db/queries.rs`** - Basic CRUD operations
+- Insert/get students, assignments, progressions
+- Class management
+- Count queries
 
-### `openclass.rs` - API Type Definitions
+**`db/analytics.rs`** - Complex analytics
+- Student health metrics
+- Blocker assignments
+- Progress over time
+- Activity tracking
+
+**Why split?** A 1000+ line file is hard to navigate. Now you know exactly where to look.
+
+### 3. LMS Provider System (`lms/`)
+
+This is the heart of our multi-provider architecture.
+
+**The Problem:** We started with OpenClass hardcoded everywhere. But what if we want to support TopHat or Canvas later?
+
+**The Solution:** Define a trait that all providers must implement:
 
 ```rust
-#[derive(Deserialize)]
-pub struct ProgressionResponse {
-    pub metadata: Metadata,
-    pub data: Vec<ProgressionData>,
-}
-
-#[derive(Deserialize)]
-pub struct ProgressionData {
-    #[serde(rename = "_id")]
-    pub id: ObjectId,
-    pub user: User,
-    pub assignment: Assignment,
-    pub grade: Option<f64>,
-    // ... more fields
+#[async_trait]
+pub trait LmsProvider: Send + Sync {
+    async fn authenticate(&mut self) -> Result<()>;
+    async fn fetch_classes(&self) -> Result<Vec<Class>>;
+    async fn fetch_progressions(&self, class_id: &str, page: i32) 
+        -> Result<ProgressionBatch>;
+    // ...
 }
 ```
 
-**Purpose:** Rust structs that match OpenClass API JSON responses. Uses `serde` for deserialization.
+Now OpenClass is just one implementation:
 
-### `sync.rs` - API Client and Sync Logic
+```
+lms/
+├── mod.rs              # LmsProvider trait + common types
+└── openclass/          # OpenClass-specific code
+    ├── mod.rs          # Implements LmsProvider
+    ├── auth.rs         # OpenClass authentication
+    ├── fetch.rs        # OpenClass API calls
+    └── types.rs        # OpenClass response types
+```
+
+**Adding TopHat?** Just create `lms/tophat/` and implement the trait. The sync engine doesn't need to change.
+
+### 4. Sync Engine (`sync/`)
+
+The sync engine is now provider-agnostic:
 
 ```rust
-pub struct OpenClassClient {
-    client: reqwest::Client,
-    base_url: String,
-    token: Option<String>,
+pub struct SyncEngine {
+    provider: Box<dyn LmsProvider>,  // Works with any provider!
 }
 
-impl OpenClassClient {
-    pub async fn authenticate(&mut self, email: &str, password: &str) -> Result<(), SyncError> { /* ... */ }
-    pub async fn fetch_progressions(&self, class_id: &str, page: u32) -> Result<ProgressionResponse, SyncError> { /* ... */ }
+impl SyncEngine {
+    pub async fn sync_class(&mut self, class_id: &str, db: &Database, full: bool) 
+        -> Result<SyncStats> {
+        // Fetch from provider
+        let batch = self.provider.fetch_progressions(class_id, page).await?;
+        
+        // Save to database
+        for progression in batch.progressions {
+            db.insert_student(/* ... */)?;
+            db.insert_progression(/* ... */)?;
+        }
+    }
 }
-
-pub async fn sync_all_data(config: &Config) -> Result<(), SyncError> { /* ... */ }
 ```
 
-**Purpose:** HTTP client for OpenClass API. Handles authentication, pagination, and data fetching.
+**Key insight:** The sync logic doesn't care if data comes from OpenClass, TopHat, or anywhere else. It just uses the `LmsProvider` trait.
+
+### 5. CLI (`cli.rs`)
+
+Command definitions and handlers in one file. Each command has a `handle_*` function:
+
+```rust
+pub async fn handle_sync(config_path: Option<String>, class_id: Option<String>, full: bool) 
+    -> Result<()> {
+    // 1. Load config
+    // 2. Create provider
+    // 3. Authenticate
+    // 4. Run sync engine
+}
+```
+
+**Why not split?** Only 8 commands, each handler is self-contained. Splitting would add complexity without benefit.
+
+### 6. API Server (`api.rs`)
+
+REST API for the dashboard. Simple handlers that query the database:
+
+```rust
+async fn list_students(
+    State(state): State<Arc<AppState>>,
+    Path(class_id): Path<String>,
+) -> Result<Json<Vec<Student>>, ApiError> {
+    let db = state.db.lock().await;
+    let students = db.get_students_by_class(&class_id)?;
+    Ok(Json(students))
+}
+```
+
+**Why not split?** 18 handlers, but they're all simple (10-20 lines). Current structure is clear.
 
 ## Data Flow
 
-### 1. Initialization (`init` command)
+Here's how data moves through the system:
 
 ```
-User Input → CLI Parser → Config Creation → Save to ~/.cohort-tracker.toml
+1. CLI Command
+   ↓
+2. Create LMS Provider (OpenClass)
+   ↓
+3. Authenticate with Provider
+   ↓
+4. Sync Engine fetches data via Provider trait
+   ↓
+5. Sync Engine saves to Database
+   ↓
+6. API Server reads from Database
+   ↓
+7. Dashboard displays data
 ```
 
-### 2. Sync Process (`sync` command)
+## Key Design Patterns
 
-```
-Config Load → API Authentication → Paginated Data Fetch → Database Storage → Sync History
-```
-
-### 3. Status Check (`status` command)
-
-```
-Config Load → Database Query → Display Stats
-```
-
-## Key Design Decisions
-
-### Async/Await for HTTP Calls
+### Trait Objects for Flexibility
 
 ```rust
-// Non-blocking HTTP requests
-let response = self.client
-    .get(&url)
-    .bearer_auth(token)
-    .send()
-    .await?;
+let provider: Box<dyn LmsProvider> = Box::new(OpenClassProvider::new(config));
+let engine = SyncEngine::new(provider);
 ```
 
-**Why:** Allows concurrent operations and better resource utilization during network I/O.
+This lets us swap providers at runtime without changing the sync engine.
 
-### Result Types for Error Handling
+### Result Type for Error Handling
 
 ```rust
-pub enum SyncError {
-    AuthenticationFailed,
-    NetworkError(reqwest::Error),
-    DatabaseError(rusqlite::Error),
+pub fn get_students(&self, class_id: &str) -> Result<Vec<Student>> {
+    // If anything fails, return Err
+    // Caller handles with ? operator
 }
 ```
 
-**Why:** Explicit error handling prevents crashes and provides clear error messages.
+No exceptions, no silent failures. Every error is explicit.
 
-### SQLite for Local Storage
-
-```rust
-// Simple, file-based database
-let conn = Connection::open("cohort-tracker.db")?;
-```
-
-**Why:** No server setup required, perfect for single-user CLI tool.
-
-### Pagination Handling
+### Async/Await for I/O
 
 ```rust
-let mut page = 0;
-loop {
-    let response = client.fetch_progressions(class_id, page).await?;
-    process_data(&response.data);
-    
-    if !response.metadata.can_load_more {
-        break;
-    }
-    page += 1;
-}
+let response = self.client.get(url).await?;
+let data = response.json().await?;
 ```
 
-**Why:** OpenClass API returns data in pages, we need to fetch all pages for complete data.
+Non-blocking I/O means we can fetch from multiple classes concurrently.
 
-### Error Handling Strategy
+## Module Organization Rules
 
-### Using `anyhow` for Simple Error Handling
+We follow these guidelines:
 
-```rust
-use anyhow::{anyhow, Result};
+1. **Top-level files** - Domain-wide concerns (models, config)
+2. **Directories** - When a file grows past ~400 lines or has multiple concerns
+3. **Re-exports** - Make imports clean (`use crate::models::*`)
+4. **Provider-specific code** - Always in `lms/<provider>/`
 
-// Simple error propagation - no custom error types needed
-pub fn from_file(path: &str) -> Result<Self> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| anyhow!("Failed to read config file: {}", e))?;
-    toml::from_str(&content).map_err(|e| anyhow!("Failed to parse config: {}", e))
-}
-```
+## Where to Add New Code
 
-### Custom Errors Only When Needed
+**New database query?** → `db/queries.rs` (CRUD) or `db/analytics.rs` (complex)
 
-```rust
-// Only create custom errors when you need specific handling
-#[derive(Debug)]
-pub enum SyncError {
-    AuthFailed,
-    NetworkError(reqwest::Error),
-    DatabaseError(rusqlite::Error),
-}
+**New CLI command?** → Add to `cli.rs` (Commands enum + handler function)
 
-// Use ? operator to propagate errors
-pub async fn sync_all_data(config: &Config) -> Result<(), SyncError> {
-    let mut client = OpenClassClient::new(&config.api_base);
-    client.authenticate(&config.email, &config.password).await?;
-    // ... rest of sync
-}
-```
+**New API endpoint?** → Add handler to `api.rs` + route in `create_router()`
+
+**New LMS provider?** → Create `lms/<provider>/` directory, implement `LmsProvider` trait
+
+**New domain model?** → Add to `models.rs`
 
 ## Testing Strategy
 
-### Unit Tests
+- **Unit tests** - In same file as code (`#[cfg(test)]` modules)
+- **Integration tests** - In `tests/` directory
+- **API tests** - Use `wiremock` to mock HTTP calls
+
+See [testing.md](./testing.md) for details.
+
+## Common Patterns You'll See
+
+### The `?` Operator
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_config_serialization() {
-        let config = Config { /* ... */ };
-        let toml = toml::to_string(&config).unwrap();
-        let parsed: Config = toml::from_str(&toml).unwrap();
-        assert_eq!(config.email, parsed.email);
-    }
+let config = Config::from_file(&path)?;  // Returns early if error
+```
+
+This is Rust's way of saying "if this fails, return the error to the caller."
+
+### Pattern Matching
+
+```rust
+match response.status() {
+    StatusCode::OK => { /* handle success */ }
+    StatusCode::UNAUTHORIZED => { /* handle auth error */ }
+    _ => { /* handle other errors */ }
 }
 ```
 
-### Integration Tests
+Rust makes you handle all cases. No surprises.
+
+### Option Handling
 
 ```rust
-#[tokio::test]
-async fn test_full_sync_flow() {
-    // Test with mock HTTP server
-    let mock_server = MockServer::start().await;
-    // ... setup mock responses
-    let result = sync_all_data(&test_config).await;
-    assert!(result.is_ok());
-}
+let section = assignment_sections.get(&id).map(|s| s.as_str());
 ```
 
-## Future Architecture (Phases 2 & 3)
+`Option<T>` means "might be None." The `?` operator works here too.
 
-### Phase 2: REST API
+## Learning Path
 
-```
-CLI Tool ← → SQLite ← → REST API Server ← → Web Dashboard
-```
+If you're new to the codebase:
 
-### Phase 3: Analytics
-
-```
-Raw Data → Analytics Engine → Metrics API → Visualization
-```
-
-## Performance Considerations
-
-- **Rate Limiting:** 500ms delay between API calls
-- **Batch Inserts:** Group database operations for efficiency  
-- **Connection Pooling:** Reuse HTTP connections
-- **Incremental Sync:** Only fetch new/updated data
+1. **Start with `models.rs`** - Understand the core data structures
+2. **Read `db/queries.rs`** - See how data is stored/retrieved
+3. **Look at `cli.rs`** - See how commands work end-to-end
+4. **Explore `lms/openclass/`** - Understand the provider pattern
+5. **Check `sync/engine.rs`** - See how it all comes together
 
 ## Next Steps
 
-- Read [Why Rust?](./why-rust.md) to understand our technology choices
-- Check [Database Design](./database.md) for schema details
-- Review [Development Guide](./development.md) for contributing
+- [Database Schema](./database.md) - Understand the data model
+- [Development Guide](./development.md) - Set up your environment
+- [Rust Basics](./rust-basics.md) - Learn Rust concepts used here
+- [OpenClass API](./openclass-api.md) - Understand the data source
+
+## Questions?
+
+The code has comments where things get tricky. If something's unclear, that's a documentation bug - let us know!
