@@ -1,14 +1,24 @@
-use anyhow::Result;
-use serde::Serialize;
+use anyhow::{Result, anyhow};
+use serde::{Serialize, Deserialize};
 use sqlite::Connection;
 
 pub struct Database {
     conn: Connection,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Class {
+    pub id: String,
+    pub name: String,
+    pub friendly_id: String,
+    pub is_active: bool,
+    pub synced_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Student {
     pub id: String,
+    pub class_id: String,
     pub first_name: String,
     pub last_name: String,
     pub email: String,
@@ -26,6 +36,7 @@ pub struct Mentor {
 #[derive(Debug, Clone, Serialize)]
 pub struct Assignment {
     pub id: String,
+    pub class_id: String,
     pub name: String,
     #[serde(rename = "type")]
     pub assignment_type: String,
@@ -34,6 +45,7 @@ pub struct Assignment {
 #[derive(Debug, Clone, Serialize)]
 pub struct ProgressionRecord {
     pub id: String,
+    pub class_id: String,
     pub student_id: String,
     pub assignment_id: String,
     pub grade: Option<f64>,
@@ -162,22 +174,30 @@ impl Database {
     pub fn new(path: &str) -> Result<Self> {
         let conn = sqlite::open(path)?;
 
-        // Create tables
+        // Create classes table
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS students (
+            "CREATE TABLE IF NOT EXISTS classes (
                 id TEXT PRIMARY KEY,
-                first_name TEXT NOT NULL,
-                last_name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                region TEXT,
-                night TEXT
+                name TEXT NOT NULL,
+                friendly_id TEXT NOT NULL UNIQUE,
+                is_active INTEGER DEFAULT 1,
+                synced_at TEXT
             )",
         )?;
 
-        // Add columns if they don't exist (for migration)
-        // FIXME: proper migrations would be better than this hack
-        let _ = conn.execute("ALTER TABLE students ADD COLUMN region TEXT");
-        let _ = conn.execute("ALTER TABLE students ADD COLUMN night TEXT");
+        // Create tables with class_id
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS students (
+                id TEXT NOT NULL,
+                class_id TEXT NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                region TEXT,
+                night TEXT,
+                PRIMARY KEY (id, class_id)
+            )",
+        )?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS mentors (
@@ -189,26 +209,32 @@ impl Database {
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS assignments (
-                id TEXT PRIMARY KEY,
+                id TEXT NOT NULL,
+                class_id TEXT NOT NULL,
                 name TEXT NOT NULL,
-                type TEXT NOT NULL
+                type TEXT NOT NULL,
+                PRIMARY KEY (id, class_id)
             )",
         )?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS progressions (
                 id TEXT PRIMARY KEY,
+                class_id TEXT NOT NULL,
                 student_id TEXT NOT NULL,
                 assignment_id TEXT NOT NULL,
                 grade REAL,
                 started_at TEXT NOT NULL,
                 completed_at TEXT NOT NULL,
                 reviewed_at TEXT,
-                synced_at TEXT NOT NULL,
-                FOREIGN KEY (student_id) REFERENCES students(id),
-                FOREIGN KEY (assignment_id) REFERENCES assignments(id)
+                synced_at TEXT NOT NULL
             )",
         )?;
+
+        // Create indexes
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_progressions_class ON progressions(class_id)")?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id)")?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id)")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sync_history (
@@ -223,27 +249,124 @@ impl Database {
         Ok(Self { conn })
     }
 
-    pub fn insert_student(&self, id: &str, first_name: &str, last_name: &str, email: &str) -> Result<()> {
+    // Class management methods
+    pub fn insert_class(&self, class: &Class) -> Result<()> {
         let stmt = self.conn.prepare(
-            "INSERT OR IGNORE INTO students (id, first_name, last_name, email) VALUES (?, ?, ?, ?)"
+            "INSERT OR REPLACE INTO classes (id, name, friendly_id, is_active, synced_at) VALUES (?, ?, ?, ?, ?)"
         )?;
-        let mut stmt = stmt
-            .bind(1, id)?
-            .bind(2, first_name)?
-            .bind(3, last_name)?
-            .bind(4, email)?;
+        let stmt = stmt
+            .bind(1, class.id.as_str())?
+            .bind(2, class.name.as_str())?
+            .bind(3, class.friendly_id.as_str())?
+            .bind(4, if class.is_active { 1 } else { 0 })?;
+        
+        let stmt = match &class.synced_at {
+            Some(s) => stmt.bind(5, s.as_str())?,
+            None => stmt.bind(5, ())?,
+        };
+        
+        let mut stmt = stmt;
         stmt.next()?;
         Ok(())
     }
 
-    pub fn insert_assignment(&self, id: &str, name: &str, assignment_type: &str) -> Result<()> {
+    pub fn get_classes(&self) -> Result<Vec<Class>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, friendly_id, is_active, synced_at FROM classes ORDER BY name"
+        )?;
+        let mut classes = Vec::new();
+
+        while let sqlite::State::Row = stmt.next()? {
+            classes.push(Class {
+                id: stmt.read::<String>(0)?,
+                name: stmt.read::<String>(1)?,
+                friendly_id: stmt.read::<String>(2)?,
+                is_active: stmt.read::<i64>(3)? == 1,
+                synced_at: stmt.read::<Option<String>>(4)?,
+            });
+        }
+
+        Ok(classes)
+    }
+
+    pub fn get_active_classes(&self) -> Result<Vec<Class>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, friendly_id, is_active, synced_at FROM classes WHERE is_active = 1 ORDER BY name"
+        )?;
+        let mut classes = Vec::new();
+
+        while let sqlite::State::Row = stmt.next()? {
+            classes.push(Class {
+                id: stmt.read::<String>(0)?,
+                name: stmt.read::<String>(1)?,
+                friendly_id: stmt.read::<String>(2)?,
+                is_active: true,
+                synced_at: stmt.read::<Option<String>>(4)?,
+            });
+        }
+
+        Ok(classes)
+    }
+
+    pub fn get_class_by_friendly_id(&self, friendly_id: &str) -> Result<Class> {
         let stmt = self.conn.prepare(
-            "INSERT OR IGNORE INTO assignments (id, name, type) VALUES (?, ?, ?)"
+            "SELECT id, name, friendly_id, is_active, synced_at FROM classes WHERE friendly_id = ?"
+        )?;
+        let mut stmt = stmt.bind(1, friendly_id)?;
+
+        match stmt.next()? {
+            sqlite::State::Row => Ok(Class {
+                id: stmt.read::<String>(0)?,
+                name: stmt.read::<String>(1)?,
+                friendly_id: stmt.read::<String>(2)?,
+                is_active: stmt.read::<i64>(3)? == 1,
+                synced_at: stmt.read::<Option<String>>(4)?,
+            }),
+            sqlite::State::Done => Err(anyhow!("Class not found: {}", friendly_id)),
+        }
+    }
+
+    pub fn set_class_active(&self, id: &str, is_active: bool) -> Result<()> {
+        let stmt = self.conn.prepare("UPDATE classes SET is_active = ? WHERE id = ?")?;
+        let mut stmt = stmt
+            .bind(1, if is_active { 1 } else { 0 })?
+            .bind(2, id)?;
+        stmt.next()?;
+        Ok(())
+    }
+
+    pub fn update_class_sync_time(&self, id: &str, synced_at: &str) -> Result<()> {
+        let stmt = self.conn.prepare("UPDATE classes SET synced_at = ? WHERE id = ?")?;
+        let mut stmt = stmt
+            .bind(1, synced_at)?
+            .bind(2, id)?;
+        stmt.next()?;
+        Ok(())
+    }
+
+    pub fn insert_student(&self, id: &str, class_id: &str, first_name: &str, last_name: &str, email: &str) -> Result<()> {
+        let stmt = self.conn.prepare(
+            "INSERT OR IGNORE INTO students (id, class_id, first_name, last_name, email) VALUES (?, ?, ?, ?, ?)"
         )?;
         let mut stmt = stmt
             .bind(1, id)?
-            .bind(2, name)?
-            .bind(3, assignment_type)?;
+            .bind(2, class_id)?
+            .bind(3, first_name)?
+            .bind(4, last_name)?
+            .bind(5, email)?;
+        stmt.next()?;
+        Ok(())
+    }
+
+    pub fn insert_assignment(&self, id: &str, class_id: &str, name: &str, assignment_type: &str) -> Result<()> {
+        let stmt = self.conn.prepare(
+            "INSERT OR IGNORE INTO assignments (id, class_id, name, type) VALUES (?, ?, ?, ?)"
+        )?;
+        let mut stmt = stmt
+            .bind(1, id)?
+            .bind(2, class_id)?
+            .bind(3, name)?
+            .bind(4, assignment_type)?;
         stmt.next()?;
         Ok(())
     }
@@ -251,6 +374,7 @@ impl Database {
     pub fn insert_progression(
         &self,
         id: &str,
+        class_id: &str,
         student_id: &str,
         assignment_id: &str,
         grade: Option<f64>,
@@ -265,25 +389,26 @@ impl Database {
 
         let stmt = self.conn.prepare(
             "INSERT OR REPLACE INTO progressions
-            (id, student_id, assignment_id, grade, started_at, completed_at, reviewed_at, synced_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            (id, class_id, student_id, assignment_id, grade, started_at, completed_at, reviewed_at, synced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )?;
         let stmt = stmt
             .bind(1, id)?
-            .bind(2, student_id)?
-            .bind(3, assignment_id)?;
+            .bind(2, class_id)?
+            .bind(3, student_id)?
+            .bind(4, assignment_id)?;
         let stmt = match grade {
-            Some(g) => stmt.bind(4, g)?,
-            None => stmt.bind(4, ())?,
+            Some(g) => stmt.bind(5, g)?,
+            None => stmt.bind(5, ())?,
         };
         let stmt = stmt
-            .bind(5, started_at)?
-            .bind(6, completed_at)?;
+            .bind(6, started_at)?
+            .bind(7, completed_at)?;
         let stmt = match reviewed_at {
-            Some(r) => stmt.bind(7, r)?,
-            None => stmt.bind(7, ())?,
+            Some(r) => stmt.bind(8, r)?,
+            None => stmt.bind(8, ())?,
         };
-        let mut stmt = stmt.bind(8, now as i64)?;
+        let mut stmt = stmt.bind(9, now as i64)?;
         stmt.next()?;
         Ok(())
     }
@@ -307,14 +432,30 @@ impl Database {
     }
 
     pub fn get_student_count(&self) -> Result<i64> {
-        let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM students")?;
+        let mut stmt = self.conn.prepare("SELECT COUNT(DISTINCT id) FROM students")?;
+        stmt.next()?;
+        let count = stmt.read::<i64>(0)?;
+        Ok(count)
+    }
+
+    pub fn get_student_count_by_class(&self, class_id: &str) -> Result<i64> {
+        let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ?")?;
+        let mut stmt = stmt.bind(1, class_id)?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
         Ok(count)
     }
 
     pub fn get_assignment_count(&self) -> Result<i64> {
-        let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM assignments")?;
+        let mut stmt = self.conn.prepare("SELECT COUNT(DISTINCT id) FROM assignments")?;
+        stmt.next()?;
+        let count = stmt.read::<i64>(0)?;
+        Ok(count)
+    }
+
+    pub fn get_assignment_count_by_class(&self, class_id: &str) -> Result<i64> {
+        let stmt = self.conn.prepare("SELECT COUNT(*) FROM assignments WHERE class_id = ?")?;
+        let mut stmt = stmt.bind(1, class_id)?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
         Ok(count)
@@ -327,15 +468,12 @@ impl Database {
         Ok(count)
     }
 
-    pub fn get_last_sync(&self) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT synced_at FROM sync_history ORDER BY synced_at DESC LIMIT 1")?;
-        match stmt.next()? {
-            sqlite::State::Row => {
-                let ts = stmt.read::<i64>(0)?;
-                Ok(Some(format!("Timestamp: {}", ts)))
-            }
-            sqlite::State::Done => Ok(None),
-        }
+    pub fn get_progression_count_by_class(&self, class_id: &str) -> Result<i64> {
+        let stmt = self.conn.prepare("SELECT COUNT(*) FROM progressions WHERE class_id = ?")?;
+        let mut stmt = stmt.bind(1, class_id)?;
+        stmt.next()?;
+        let count = stmt.read::<i64>(0)?;
+        Ok(count)
     }
 
     pub fn get_last_sync_timestamp(&self) -> Result<Option<i64>> {
@@ -349,72 +487,79 @@ impl Database {
         }
     }
 
-    pub fn get_all_students(&self) -> Result<Vec<Student>> {
-        let mut stmt = self.conn.prepare("SELECT id, first_name, last_name, email, region, night FROM students ORDER BY last_name, first_name")?;
+    pub fn get_students_by_class(&self, class_id: &str) -> Result<Vec<Student>> {
+        let stmt = self.conn.prepare("SELECT id, class_id, first_name, last_name, email, region, night FROM students WHERE class_id = ? ORDER BY last_name, first_name")?;
+        let mut stmt = stmt.bind(1, class_id)?;
         let mut students = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
             students.push(Student {
                 id: stmt.read::<String>(0)?,
-                first_name: stmt.read::<String>(1)?,
-                last_name: stmt.read::<String>(2)?,
-                email: stmt.read::<String>(3)?,
-                region: stmt.read::<Option<String>>(4)?,
-                night: stmt.read::<Option<String>>(5)?,
+                class_id: stmt.read::<String>(1)?,
+                first_name: stmt.read::<String>(2)?,
+                last_name: stmt.read::<String>(3)?,
+                email: stmt.read::<String>(4)?,
+                region: stmt.read::<Option<String>>(5)?,
+                night: stmt.read::<Option<String>>(6)?,
             });
         }
 
         Ok(students)
     }
 
-    pub fn get_all_assignments(&self) -> Result<Vec<Assignment>> {
-        let mut stmt = self.conn.prepare("SELECT id, name, type FROM assignments ORDER BY name")?;
+    pub fn get_assignments_by_class(&self, class_id: &str) -> Result<Vec<Assignment>> {
+        let stmt = self.conn.prepare("SELECT id, class_id, name, type FROM assignments WHERE class_id = ? ORDER BY name")?;
+        let mut stmt = stmt.bind(1, class_id)?;
         let mut assignments = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
             assignments.push(Assignment {
                 id: stmt.read::<String>(0)?,
-                name: stmt.read::<String>(1)?,
-                assignment_type: stmt.read::<String>(2)?,
+                class_id: stmt.read::<String>(1)?,
+                name: stmt.read::<String>(2)?,
+                assignment_type: stmt.read::<String>(3)?,
             });
         }
 
         Ok(assignments)
     }
 
-    pub fn get_all_progressions(&self) -> Result<Vec<ProgressionRecord>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, student_id, assignment_id, grade, started_at, completed_at, reviewed_at, synced_at
-             FROM progressions ORDER BY completed_at DESC"
+    pub fn get_progressions_by_class(&self, class_id: &str) -> Result<Vec<ProgressionRecord>> {
+        let stmt = self.conn.prepare(
+            "SELECT id, class_id, student_id, assignment_id, grade, started_at, completed_at, reviewed_at, synced_at
+             FROM progressions WHERE class_id = ? ORDER BY completed_at DESC"
         )?;
+        let mut stmt = stmt.bind(1, class_id)?;
         let mut progressions = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
-            let grade: Option<f64> = stmt.read::<Option<f64>>(3)?;
-            let reviewed_at: Option<String> = stmt.read::<Option<String>>(6)?;
+            let grade: Option<f64> = stmt.read::<Option<f64>>(4)?;
+            let reviewed_at: Option<String> = stmt.read::<Option<String>>(7)?;
 
             progressions.push(ProgressionRecord {
                 id: stmt.read::<String>(0)?,
-                student_id: stmt.read::<String>(1)?,
-                assignment_id: stmt.read::<String>(2)?,
+                class_id: stmt.read::<String>(1)?,
+                student_id: stmt.read::<String>(2)?,
+                assignment_id: stmt.read::<String>(3)?,
                 grade,
-                started_at: stmt.read::<String>(4)?,
-                completed_at: stmt.read::<String>(5)?,
+                started_at: stmt.read::<String>(5)?,
+                completed_at: stmt.read::<String>(6)?,
                 reviewed_at,
-                synced_at: stmt.read::<i64>(7)?,
+                synced_at: stmt.read::<i64>(8)?,
             });
         }
 
         Ok(progressions)
     }
 
-    pub fn get_progress_summary(&self) -> Result<ProgressSummary> {
-        let total_students = self.get_student_count()?;
-        let total_assignments = self.get_assignment_count()?;
-        let total_progressions = self.get_progression_count()?;
+    pub fn get_progress_summary(&self, class_id: &str) -> Result<ProgressSummary> {
+        let total_students = self.get_student_count_by_class(class_id)?;
+        let total_assignments = self.get_assignment_count_by_class(class_id)?;
+        let total_progressions = self.get_progression_count_by_class(class_id)?;
 
         // Calculate average grade
-        let mut stmt = self.conn.prepare("SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL")?;
+        let stmt = self.conn.prepare("SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL AND class_id = ?")?;
+        let mut stmt = stmt.bind(1, class_id)?;
         let avg_grade = match stmt.next()? {
             sqlite::State::Row => stmt.read::<Option<f64>>(0)?,
             sqlite::State::Done => None,
@@ -495,8 +640,8 @@ impl Database {
         })
     }
 
-    pub fn get_blockers(&self, limit: usize) -> Result<Vec<BlockerAssignment>> {
-        let total_students = self.get_student_count()?;
+    pub fn get_blockers(&self, class_id: &str, limit: usize) -> Result<Vec<BlockerAssignment>> {
+        let total_students = self.get_student_count_by_class(class_id)?;
 
         // Find assignments with lowest completion rates
         let stmt = self.conn.prepare(
@@ -504,12 +649,13 @@ impl Database {
                     COUNT(p.id) as completions,
                     AVG(p.grade) as avg_grade
              FROM assignments a
-             LEFT JOIN progressions p ON a.id = p.assignment_id
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             WHERE a.class_id = ?
              GROUP BY a.id, a.name
              ORDER BY completions ASC, avg_grade ASC
              LIMIT ?"
         )?;
-        let mut stmt = stmt.bind(1, limit as i64)?;
+        let mut stmt = stmt.bind(1, class_id)?.bind(2, limit as i64)?;
 
         let mut blockers = Vec::new();
 
@@ -535,19 +681,21 @@ impl Database {
         Ok(blockers)
     }
 
-    pub fn get_student_health(&self) -> Result<Vec<StudentHealth>> {
-        let total_assignments = self.get_assignment_count()?;
+    pub fn get_student_health(&self, class_id: &str) -> Result<Vec<StudentHealth>> {
+        let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
         // Get completion stats per student
-        let mut stmt = self.conn.prepare(
+        let stmt = self.conn.prepare(
             "SELECT s.id, s.first_name, s.last_name, s.email,
                     COUNT(p.id) as completed,
                     AVG(p.grade) as avg_grade
              FROM students s
-             LEFT JOIN progressions p ON s.id = p.student_id
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.class_id = ?
              GROUP BY s.id, s.first_name, s.last_name, s.email
              ORDER BY completed ASC, avg_grade ASC"
         )?;
+        let mut stmt = stmt.bind(1, class_id)?;
 
         let mut students = Vec::new();
 
@@ -587,16 +735,17 @@ impl Database {
         Ok(students)
     }
 
-    pub fn get_progress_over_time(&self) -> Result<Vec<WeeklyProgress>> {
+    pub fn get_progress_over_time(&self, class_id: &str) -> Result<Vec<WeeklyProgress>> {
         // Group completions by week
-        let mut stmt = self.conn.prepare(
+        let stmt = self.conn.prepare(
             "SELECT strftime('%Y-%W', completed_at) as week,
                     COUNT(*) as completed
              FROM progressions
-             WHERE completed_at IS NOT NULL AND completed_at != ''
+             WHERE completed_at IS NOT NULL AND completed_at != '' AND class_id = ?
              GROUP BY week
              ORDER BY week ASC"
         )?;
+        let mut stmt = stmt.bind(1, class_id)?;
 
         let mut weekly = Vec::new();
         let mut cumulative = 0i64;
@@ -617,11 +766,11 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn get_student_activity(&self) -> Result<Vec<StudentActivity>> {
-        self.get_student_activity_filtered(None)
+    pub fn get_student_activity(&self, class_id: &str) -> Result<Vec<StudentActivity>> {
+        self.get_student_activity_filtered(class_id, None)
     }
 
-    pub fn get_student_activity_filtered(&self, night: Option<&str>) -> Result<Vec<StudentActivity>> {
+    pub fn get_student_activity_filtered(&self, class_id: &str, night: Option<&str>) -> Result<Vec<StudentActivity>> {
         // Get last activity date and total completions per student
         let query = match night {
             Some(_) => {
@@ -629,8 +778,8 @@ impl Database {
                         MAX(p.completed_at) as last_activity,
                         COUNT(p.id) as total_completions
                  FROM students s
-                 LEFT JOIN progressions p ON s.id = p.student_id
-                 WHERE LOWER(s.night) = LOWER(?)
+                 LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+                 WHERE s.class_id = ? AND LOWER(s.night) = LOWER(?)
                  GROUP BY s.id, s.first_name, s.last_name, s.email, s.night
                  ORDER BY last_activity ASC NULLS FIRST"
             }
@@ -639,7 +788,8 @@ impl Database {
                         MAX(p.completed_at) as last_activity,
                         COUNT(p.id) as total_completions
                  FROM students s
-                 LEFT JOIN progressions p ON s.id = p.student_id
+                 LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+                 WHERE s.class_id = ?
                  GROUP BY s.id, s.first_name, s.last_name, s.email, s.night
                  ORDER BY last_activity ASC NULLS FIRST"
             }
@@ -647,9 +797,10 @@ impl Database {
 
         let mut stmt = if let Some(n) = night {
             let stmt = self.conn.prepare(query)?;
-            stmt.bind(1, n)?
+            stmt.bind(1, class_id)?.bind(2, n)?
         } else {
-            self.conn.prepare(query)?
+            let stmt = self.conn.prepare(query)?;
+            stmt.bind(1, class_id)?
         };
 
         let mut activities = Vec::new();
@@ -758,42 +909,44 @@ impl Database {
         Ok(mentors)
     }
 
-    pub fn get_students_by_night(&self, night: &str) -> Result<Vec<Student>> {
+    pub fn get_students_by_night(&self, class_id: &str, night: &str) -> Result<Vec<Student>> {
         let stmt = self.conn.prepare(
-            "SELECT id, first_name, last_name, email, region, night FROM students WHERE LOWER(night) = LOWER(?) ORDER BY last_name, first_name"
+            "SELECT id, class_id, first_name, last_name, email, region, night FROM students WHERE class_id = ? AND LOWER(night) = LOWER(?) ORDER BY last_name, first_name"
         )?;
-        let mut stmt = stmt.bind(1, night)?;
+        let mut stmt = stmt.bind(1, class_id)?.bind(2, night)?;
         let mut students = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
             students.push(Student {
                 id: stmt.read::<String>(0)?,
-                first_name: stmt.read::<String>(1)?,
-                last_name: stmt.read::<String>(2)?,
-                email: stmt.read::<String>(3)?,
-                region: stmt.read::<Option<String>>(4)?,
-                night: stmt.read::<Option<String>>(5)?,
+                class_id: stmt.read::<String>(1)?,
+                first_name: stmt.read::<String>(2)?,
+                last_name: stmt.read::<String>(3)?,
+                email: stmt.read::<String>(4)?,
+                region: stmt.read::<Option<String>>(5)?,
+                night: stmt.read::<Option<String>>(6)?,
             });
         }
 
         Ok(students)
     }
 
-    pub fn get_night_summary(&self) -> Result<Vec<NightSummary>> {
-        let total_assignments = self.get_assignment_count()?;
+    pub fn get_night_summary(&self, class_id: &str) -> Result<Vec<NightSummary>> {
+        let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
         // Get stats grouped by night
-        let mut stmt = self.conn.prepare(
+        let stmt = self.conn.prepare(
             "SELECT s.night,
                     COUNT(DISTINCT s.id) as student_count,
                     COUNT(p.id) as total_completions,
                     AVG(p.grade) as avg_grade
              FROM students s
-             LEFT JOIN progressions p ON s.id = p.student_id
-             WHERE s.night IS NOT NULL
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.night IS NOT NULL AND s.class_id = ?
              GROUP BY s.night
              ORDER BY s.night"
         )?;
+        let mut stmt = stmt.bind(1, class_id)?;
 
         let mut summaries = Vec::new();
 
@@ -840,8 +993,8 @@ impl Database {
         Ok(count)
     }
 
-    pub fn get_student_detail(&self, student_id: &str) -> Result<Option<StudentDetail>> {
-        let total_assignments = self.get_assignment_count()?;
+    pub fn get_student_detail(&self, class_id: &str, student_id: &str) -> Result<Option<StudentDetail>> {
+        let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
         let stmt = self.conn.prepare(
             "SELECT s.id, s.first_name, s.last_name, s.email, s.region, s.night,
@@ -849,11 +1002,11 @@ impl Database {
                     AVG(p.grade) as avg_grade,
                     MAX(p.completed_at) as last_activity
              FROM students s
-             LEFT JOIN progressions p ON s.id = p.student_id
-             WHERE s.id = ?
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.id = ? AND s.class_id = ?
              GROUP BY s.id, s.first_name, s.last_name, s.email, s.region, s.night"
         )?;
-        let mut stmt = stmt.bind(1, student_id)?;
+        let mut stmt = stmt.bind(1, student_id)?.bind(2, class_id)?;
 
         match stmt.next()? {
             sqlite::State::Row => {
@@ -903,17 +1056,18 @@ impl Database {
         }
     }
 
-    pub fn get_student_assignments(&self, student_id: &str) -> Result<Vec<StudentAssignmentStatus>> {
+    pub fn get_student_assignments(&self, class_id: &str, student_id: &str) -> Result<Vec<StudentAssignmentStatus>> {
         // Get all assignments with student's completion status
         let stmt = self.conn.prepare(
             "SELECT a.id, a.name, a.type,
                     p.grade, p.completed_at,
                     CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as completed
              FROM assignments a
-             LEFT JOIN progressions p ON a.id = p.assignment_id AND p.student_id = ?
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id AND p.student_id = ?
+             WHERE a.class_id = ?
              ORDER BY a.name"
         )?;
-        let mut stmt = stmt.bind(1, student_id)?;
+        let mut stmt = stmt.bind(1, student_id)?.bind(2, class_id)?;
 
         let mut assignments = Vec::new();
 
@@ -932,18 +1086,18 @@ impl Database {
         Ok(assignments)
     }
 
-    pub fn get_student_progress_timeline(&self, student_id: &str) -> Result<Vec<StudentProgressPoint>> {
+    pub fn get_student_progress_timeline(&self, class_id: &str, student_id: &str) -> Result<Vec<StudentProgressPoint>> {
         // Get weekly progress for a specific student
         let stmt = self.conn.prepare(
             "SELECT strftime('%Y-%W', completed_at) as week,
                     COUNT(*) as completed,
                     AVG(grade) as avg_grade
              FROM progressions
-             WHERE student_id = ? AND completed_at IS NOT NULL AND completed_at != ''
+             WHERE student_id = ? AND class_id = ? AND completed_at IS NOT NULL AND completed_at != ''
              GROUP BY week
              ORDER BY week ASC"
         )?;
-        let mut stmt = stmt.bind(1, student_id)?;
+        let mut stmt = stmt.bind(1, student_id)?.bind(2, class_id)?;
 
         let mut timeline = Vec::new();
         let mut cumulative = 0i64;

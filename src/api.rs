@@ -15,7 +15,7 @@ use tower_http::services::ServeDir;
 use crate::config::Config;
 #[allow(unused_imports)]
 use crate::db::{
-    Assignment, BlockerAssignment, CompletionMetrics, Database, Mentor, NightSummary,
+    Assignment, BlockerAssignment, Class, CompletionMetrics, Database, Mentor, NightSummary,
     ProgressSummary, ProgressionRecord, Student, StudentActivity, StudentAssignmentStatus,
     StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
 };
@@ -63,6 +63,17 @@ where
     }
 }
 
+// Query parameters
+#[derive(Debug, Deserialize)]
+pub struct StudentActivityQuery {
+    pub night: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClassListQuery {
+    pub all: Option<bool>,
+}
+
 // Handler functions
 async fn health(State(state): State<Arc<AppState>>) -> Result<Json<HealthResponse>, ApiError> {
     let db = state.db.lock().await;
@@ -81,39 +92,52 @@ async fn health(State(state): State<Arc<AppState>>) -> Result<Json<HealthRespons
     }))
 }
 
+async fn list_classes(
+    Query(query): Query<ClassListQuery>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<Class>>, ApiError> {
+    let db = state.db.lock().await;
+    let classes = if query.all.unwrap_or(false) {
+        db.get_classes()?
+    } else {
+        db.get_active_classes()?
+    };
+    Ok(Json(classes))
+}
+
 async fn list_students(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Student>>, ApiError> {
     let db = state.db.lock().await;
-    let students = db.get_all_students()?;
+    let students = db.get_students_by_class(&class_id)?;
     Ok(Json(students))
 }
 
 async fn list_assignments(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Assignment>>, ApiError> {
     let db = state.db.lock().await;
-    let assignments = db.get_all_assignments()?;
+    let assignments = db.get_assignments_by_class(&class_id)?;
     Ok(Json(assignments))
 }
 
 async fn list_progressions(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ProgressionRecord>>, ApiError> {
     let db = state.db.lock().await;
-    let progressions = db.get_all_progressions()?;
+    let progressions = db.get_progressions_by_class(&class_id)?;
     Ok(Json(progressions))
 }
 
 async fn progress_summary(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProgressSummary>, ApiError> {
     let db = state.db.lock().await;
-    let summary = db.get_progress_summary()?;
+    let summary = db.get_progress_summary(&class_id)?;
     Ok(Json(summary))
 }
 
@@ -128,45 +152,39 @@ async fn metrics_completion(
 }
 
 async fn metrics_blockers(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<BlockerAssignment>>, ApiError> {
     let db = state.db.lock().await;
-    let blockers = db.get_blockers(10)?; // Top 10 blockers
+    let blockers = db.get_blockers(&class_id, 10)?; // Top 10 blockers
     Ok(Json(blockers))
 }
 
 async fn metrics_student_health(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentHealth>>, ApiError> {
     let db = state.db.lock().await;
-    let health = db.get_student_health()?;
+    let health = db.get_student_health(&class_id)?;
     Ok(Json(health))
 }
 
 async fn metrics_progress_over_time(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<WeeklyProgress>>, ApiError> {
     let db = state.db.lock().await;
-    let progress = db.get_progress_over_time()?;
+    let progress = db.get_progress_over_time(&class_id)?;
     Ok(Json(progress))
 }
 
-// Query parameters for student activity filtering
-#[derive(Debug, Deserialize)]
-pub struct StudentActivityQuery {
-    pub night: Option<String>,
-}
-
 async fn metrics_student_activity(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     Query(query): Query<StudentActivityQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentActivity>>, ApiError> {
     let db = state.db.lock().await;
-    let activity = db.get_student_activity_filtered(query.night.as_deref())?;
+    let activity = db.get_student_activity_filtered(&class_id, query.night.as_deref())?;
     Ok(Json(activity))
 }
 
@@ -179,29 +197,29 @@ async fn list_mentors(
 }
 
 async fn metrics_night_summary(
-    Path(_class_id): Path<String>,
+    Path(class_id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<NightSummary>>, ApiError> {
     let db = state.db.lock().await;
-    let summary = db.get_night_summary()?;
+    let summary = db.get_night_summary(&class_id)?;
     Ok(Json(summary))
 }
 
 async fn students_by_night(
-    Path((_class_id, night)): Path<(String, String)>,
+    Path((class_id, night)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Student>>, ApiError> {
     let db = state.db.lock().await;
-    let students = db.get_students_by_night(&night)?;
+    let students = db.get_students_by_night(&class_id, &night)?;
     Ok(Json(students))
 }
 
 async fn student_detail(
-    Path((_class_id, student_id)): Path<(String, String)>,
+    Path((class_id, student_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, ApiError> {
     let db = state.db.lock().await;
-    match db.get_student_detail(&student_id)? {
+    match db.get_student_detail(&class_id, &student_id)? {
         Some(detail) => Ok((StatusCode::OK, Json(detail)).into_response()),
         None => Ok((
             StatusCode::NOT_FOUND,
@@ -214,20 +232,20 @@ async fn student_detail(
 }
 
 async fn student_assignments(
-    Path((_class_id, student_id)): Path<(String, String)>,
+    Path((class_id, student_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentAssignmentStatus>>, ApiError> {
     let db = state.db.lock().await;
-    let assignments = db.get_student_assignments(&student_id)?;
+    let assignments = db.get_student_assignments(&class_id, &student_id)?;
     Ok(Json(assignments))
 }
 
 async fn student_progress_timeline(
-    Path((_class_id, student_id)): Path<(String, String)>,
+    Path((class_id, student_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentProgressPoint>>, ApiError> {
     let db = state.db.lock().await;
-    let timeline = db.get_student_progress_timeline(&student_id)?;
+    let timeline = db.get_student_progress_timeline(&class_id, &student_id)?;
     Ok(Json(timeline))
 }
 
@@ -243,6 +261,7 @@ fn create_router(state: Arc<AppState>) -> Router {
 
     Router::new()
         .route("/health", get(health))
+        .route("/classes", get(list_classes))
         .route("/classes/:class_id/students", get(list_students))
         .route("/classes/:class_id/assignments", get(list_assignments))
         .route("/classes/:class_id/progressions", get(list_progressions))
@@ -284,6 +303,7 @@ pub async fn start_server(config: Config, db_path: &str, port: u16) -> Result<()
     println!();
     println!("Available endpoints:");
     println!("  GET  /health");
+    println!("  GET  /classes[?all=true]");
     println!("  GET  /classes/{{class_id}}/students");
     println!("  GET  /classes/{{class_id}}/assignments");
     println!("  GET  /classes/{{class_id}}/progressions");
