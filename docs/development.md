@@ -84,8 +84,11 @@ cargo build --release
 ```rust
 #[derive(Subcommand)]
 pub enum Commands {
-    Init { email: String, password: String, class_id: String, api_base: Option<String> },
-    Sync,
+    Init { email: String, password: String, api_base: Option<String> },
+    List { all: bool },
+    Activate { friendly_ids: Vec<String> },
+    Deactivate { friendly_ids: Vec<String> },
+    Sync { class: Option<String> },
     Status,
     Analytics { student_id: Option<String> },
 }
@@ -217,7 +220,6 @@ mod tests {
         let config = Config {
             email: "test@example.com".to_string(),
             password: "password".to_string(),
-            class_id: "valid_id".to_string(),
             api_base: "https://api.openclass.ai".to_string(),
         };
         

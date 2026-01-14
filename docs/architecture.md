@@ -30,11 +30,20 @@ async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
 
     match cli.command {
-        cli::Commands::Init { email, password, class_id, api_base } => {
-            cli::handle_init(email, password, class_id, api_base).await?;
+        cli::Commands::Init { email, password, api_base } => {
+            cli::handle_init(email, password, api_base).await?;
         }
-        cli::Commands::Sync => {
-            cli::handle_sync(cli.config).await?;
+        cli::Commands::List { all } => {
+            cli::handle_list(all).await?;
+        }
+        cli::Commands::Activate { friendly_ids } => {
+            cli::handle_activate(friendly_ids).await?;
+        }
+        cli::Commands::Deactivate { friendly_ids } => {
+            cli::handle_deactivate(friendly_ids).await?;
+        }
+        cli::Commands::Sync { class } => {
+            cli::handle_sync(cli.config, class).await?;
         }
         cli::Commands::Status => {
             cli::handle_status(cli.config).await?;
@@ -62,8 +71,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    Init { email: String, password: String, class_id: String },
-    Sync,
+    Init { email: String, password: String, api_base: String },
+    List { all: bool },
+    Activate { friendly_ids: Vec<String> },
+    Deactivate { friendly_ids: Vec<String> },
+    Sync { class: Option<String> },
     Status,
 }
 ```

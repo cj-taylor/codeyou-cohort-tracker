@@ -4,10 +4,11 @@ This document explains how Cohort Tracker integrates with the OpenClass.ai API t
 
 ## API Overview
 
-OpenClass provides a REST API for accessing student data. We use two main endpoints:
+OpenClass provides a REST API for accessing student data. We use three main endpoints:
 
 1. **Authentication** - Get bearer token for API access
-2. **Progressions** - Fetch student progress data with pagination
+2. **Classes** - List all classes the user has access to
+3. **Progressions** - Fetch student progress data with pagination
 
 ## Authentication Flow
 
@@ -15,27 +16,116 @@ OpenClass provides a REST API for accessing student data. We use two main endpoi
 
 ```http
 POST https://api.openclass.ai/v1/auth/login
-Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
 
-{
-  "email": "mentor@example.com",
-  "password": "your-password"
-}
+email=mentor@example.com&password=your-password&invite_code=&instructor_invite_code=&mentor_invite_code=
 ```
+
+**Required Headers:**
+- `Content-Type: application/x-www-form-urlencoded`
+- `Accept: */*`
+- `Origin: https://classroom.code-you.org`
+- `X-OpenClass-App-Id: 38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0`
 
 **Response:**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "user123",
-    "email": "mentor@example.com",
-    "role": "mentor"
+  "result": {
+    "objects": ["{\"first_name\": \"John\", \"last_name\": \"Doe\", \"email\": \"john@example.com\", \"license\": \"school\"}"],
+    "token": "eyJhbGciOiJIUzUxMiIsImlhdCI6MTc2ODM0NjEyNywiZXhwIjoxNzcwOTM4MTI3fQ..."
   }
 }
 ```
 
+## Classes API
+
+### List Classes Endpoint
+
+```http
+GET https://api.openclass.ai/v1/classes
+Authorization: Bearer {token}
+```
+
+**Required Headers:**
+- `bearer: {token}` (note: lowercase "bearer", not "Authorization")
+- `Content-Type: application/json; charset=ISO-8859-1`
+- `Accept: */*`
+- `Origin: https://classroom.code-you.org`
+- `X-OpenClass-App-Id: 38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0`
+
+**Response Structure:**
+```json
+{
+  "result": {
+    "objects": "{\"metadata\": {\"total\": 5, \"page\": 0, \"results_per_page\": 999}, \"data\": [{\"_id\": {\"$oid\": \"6913dda091c226449a91e0d4\"}, \"id\": \"6913dda091c226449a91e0d4\", \"friendly_id\": \"data-analysis-pathway-module-2-aug-2\", \"name\": \"Data Analysis Pathway - Module 2 | AUG 25\", ...}]}"
+  }
+}
+```
+
+**Note:** The API wraps JSON data as a string inside `result.objects`. You must parse it twice:
+1. Parse outer JSON to get `result.objects` string
+2. Parse inner JSON string to get actual class data
+
+**Class Object Fields:**
+- `id` - Unique class identifier (MongoDB ObjectId)
+- `friendly_id` - URL-friendly identifier (used in CLI)
+- `name` - Display name of the class
+- `is_published` - Whether class is published
+- `school` - School identifier
+- `assignments` - Array of assignment IDs
+- `units` - Array of unit objects with assignments
+- `mentors` - Array of mentor assignments
+- `instructors` - Array of instructor IDs
+
 ### Implementation in Rust
+
+```rust
+pub async fn fetch_classes(&self) -> Result<Vec<Class>> {
+    let token = self.token.as_ref().ok_or_else(|| anyhow!("Not authenticated"))?;
+
+    let response = self.client
+        .get(format!("{}/v1/classes", self.config.api_base))
+        .header("bearer", token)
+        .header("Content-Type", "application/json; charset=ISO-8859-1")
+        .header("Accept", "*/*")
+        .header("Origin", "https://classroom.code-you.org")
+        .header("X-OpenClass-App-Id", "38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0")
+        .send()
+        .await?;
+
+    let text = response.text().await?;
+    let outer_json: serde_json::Value = serde_json::from_str(&text)?;
+    
+    // Extract nested JSON string
+    let inner_json_str = outer_json
+        .get("result")
+        .and_then(|r| r.get("objects"))
+        .and_then(|o| o.as_str())
+        .ok_or_else(|| anyhow!("Invalid response structure"))?;
+    
+    let inner_json: serde_json::Value = serde_json::from_str(inner_json_str)?;
+    let classes_data = inner_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .ok_or_else(|| anyhow!("No classes data found"))?;
+
+    // Parse each class object
+    let mut classes = Vec::new();
+    for class_obj in classes_data {
+        classes.push(Class {
+            id: class_obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            name: class_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            friendly_id: class_obj.get("friendly_id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            is_active: false,
+            synced_at: None,
+        });
+    }
+
+    Ok(classes)
+}
+```
+
+### Implementation in Rust (Old - Incorrect)
 
 ```rust
 #[derive(Serialize)]

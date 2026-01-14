@@ -4,98 +4,137 @@ This document explains the SQLite database schema used by Cohort Tracker and the
 
 ## Schema Overview
 
-The database consists of four main tables that store student progression data from OpenClass:
+The database consists of five main tables that store student progression data from OpenClass:
 
 ```sql
 -- Core entities
-students      -- Student information
-assignments   -- Assignment/lesson definitions  
+classes       -- Class/cohort definitions
+students      -- Student information (per class)
+assignments   -- Assignment/lesson definitions (per class)
 progressions  -- Student progress on assignments
 
 -- Metadata
 sync_history  -- Track sync operations
+mentors       -- Mentor assignments by night
 ```
 
 ## Table Definitions
+
+### `classes` Table
+
+```sql
+CREATE TABLE classes (
+    id TEXT PRIMARY KEY,              -- OpenClass class ID
+    name TEXT NOT NULL,               -- Class display name
+    friendly_id TEXT NOT NULL UNIQUE, -- URL-friendly identifier
+    is_active INTEGER DEFAULT 1,      -- 1 = active, 0 = archived
+    synced_at TEXT                    -- Last sync timestamp
+);
+```
+
+**Purpose:** Store class/cohort information from OpenClass. Users can have access to multiple classes.
+
+**Key Design Decisions:**
+- `friendly_id` is used for CLI commands (more readable than ID)
+- `is_active` controls which classes are synced
+- `synced_at` tracks last successful sync per class
+
+**Example Data:**
+```sql
+INSERT INTO classes VALUES 
+('6913dda091c226449a91e0d4', 'Data Analysis Pathway - Module 2 | AUG 25', 
+ 'data-analysis-pathway-module-2-aug-2', 1, '2026-01-13T18:00:00.000Z'),
+('68e594f320442cbbe62a18dc', 'Data Analysis Pathway - Module 1 | AUG 25',
+ 'data-analysis-pathway-module-1-aug-2', 1, NULL);
+```
 
 ### `students` Table
 
 ```sql
 CREATE TABLE students (
-    id TEXT PRIMARY KEY,           -- OpenClass user ID
-    first_name TEXT NOT NULL,      -- Student's first name
-    last_name TEXT NOT NULL,       -- Student's last name  
-    email TEXT UNIQUE NOT NULL     -- Student's email (unique)
+    id TEXT NOT NULL,                 -- OpenClass user ID
+    class_id TEXT NOT NULL,           -- Foreign key to classes.id
+    first_name TEXT NOT NULL,         -- Student's first name
+    last_name TEXT NOT NULL,          -- Student's last name  
+    email TEXT NOT NULL,              -- Student's email
+    region TEXT,                      -- Optional region
+    night TEXT,                       -- Optional class night
+    PRIMARY KEY (id, class_id)        -- Composite key: student can be in multiple classes
 );
 ```
 
 **Purpose:** Store basic student information from OpenClass user data.
 
 **Key Design Decisions:**
-- `id` is OpenClass's user ID (string format)
-- `email` has UNIQUE constraint to prevent duplicate students
-- Names are separate fields for flexible display/sorting
+- Composite primary key `(id, class_id)` allows same student in multiple classes
+- `email` no longer has UNIQUE constraint (student can be in multiple classes)
+- `class_id` required for all queries to ensure data isolation
 
 **Example Data:**
 ```sql
 INSERT INTO students VALUES 
-('686d10387bbf0124aac02088', 'Jane', 'Doe', 'jane.doe@example.com'),
-('686d10387bbf0124aac02089', 'John', 'Smith', 'john.smith@example.com');
+('686d10387bbf0124aac02088', '6913dda091c226449a91e0d4', 'Jane', 'Doe', 'jane.doe@example.com', NULL, NULL),
+('686d10387bbf0124aac02088', '68e594f320442cbbe62a18dc', 'Jane', 'Doe', 'jane.doe@example.com', NULL, NULL);
+-- Same student in two different classes
 ```
 
 ### `assignments` Table
 
 ```sql
 CREATE TABLE assignments (
-    id TEXT PRIMARY KEY,     -- OpenClass assignment ID
-    name TEXT NOT NULL,      -- Assignment/lesson name
-    type TEXT NOT NULL       -- "lesson" or "quiz"
+    id TEXT NOT NULL,           -- OpenClass assignment ID
+    class_id TEXT NOT NULL,     -- Foreign key to classes.id
+    name TEXT NOT NULL,         -- Assignment/lesson name
+    type TEXT NOT NULL,         -- "lesson" or "quiz"
+    PRIMARY KEY (id, class_id)  -- Composite key: assignment can be in multiple classes
 );
 ```
 
 **Purpose:** Store assignment metadata from OpenClass.
 
 **Key Design Decisions:**
+- Composite primary key allows same assignment in multiple classes
 - `type` distinguishes between lessons and quizzes for analytics
-- `name` is the display name from OpenClass
-- Simple structure - more fields can be added later
+- `class_id` required for filtering
 
 **Example Data:**
 ```sql
 INSERT INTO assignments VALUES 
-('68e594f520442cbbe62a19c9', 'Bring It Into Focus', 'lesson'),
-('68e594f520442cbbe62a19ca', 'JavaScript Basics Quiz', 'quiz');
+('68e594f520442cbbe62a19c9', '6913dda091c226449a91e0d4', 'Bring It Into Focus', 'lesson'),
+('68e594f520442cbbe62a19c9', '68e594f320442cbbe62a18dc', 'Bring It Into Focus', 'lesson');
+-- Same assignment in two different classes
 ```
 
 ### `progressions` Table
 
 ```sql
 CREATE TABLE progressions (
-    id TEXT PRIMARY KEY,              -- OpenClass progression ID
+    id TEXT PRIMARY KEY,              -- OpenClass progression ID (globally unique)
+    class_id TEXT NOT NULL,           -- Foreign key to classes.id
     student_id TEXT NOT NULL,         -- Foreign key to students.id
     assignment_id TEXT NOT NULL,      -- Foreign key to assignments.id
     grade REAL,                       -- 0.0 to 1.0, or NULL if not graded
     started_at TEXT NOT NULL,         -- ISO 8601 timestamp
     completed_at TEXT NOT NULL,       -- ISO 8601 timestamp  
     reviewed_at TEXT,                 -- ISO 8601 timestamp, NULL if not reviewed
-    synced_at TEXT NOT NULL,          -- When we fetched this record
-    FOREIGN KEY (student_id) REFERENCES students(id),
-    FOREIGN KEY (assignment_id) REFERENCES assignments(id)
+    synced_at TEXT NOT NULL           -- When we fetched this record
 );
+
+CREATE INDEX idx_progressions_class ON progressions(class_id);
 ```
 
 **Purpose:** Core table storing student progress on assignments.
 
 **Key Design Decisions:**
-- `grade` is nullable - assignments may not be graded yet
-- All timestamps stored as TEXT in ISO 8601 format for simplicity
+- `id` is globally unique (OpenClass progression ID)
+- `class_id` indexed for fast filtering
+- All timestamps stored as TEXT in ISO 8601 format
 - `synced_at` tracks when we last updated this record
-- Foreign keys ensure referential integrity
 
 **Example Data:**
 ```sql
 INSERT INTO progressions VALUES 
-('693b4d9ba039325fb0b89f92', '686d10387bbf0124aac02088', '68e594f520442cbbe62a19c9', 
+('693b4d9ba039325fb0b89f92', '6913dda091c226449a91e0d4', '686d10387bbf0124aac02088', '68e594f520442cbbe62a19c9', 
  1.0, '2025-12-11T23:02:51.781Z', '2025-12-11T23:02:51.781Z', NULL, '2025-12-12T10:00:00.000Z');
 ```
 

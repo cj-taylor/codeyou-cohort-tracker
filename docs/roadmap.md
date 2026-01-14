@@ -7,7 +7,7 @@ Thinking out loud about where this could go. Take what's useful, ignore the rest
 If I had to pick what to tackle next:
 
 1. **Notebooks** - gets the data mentors something to play with right away
-2. **Multi-class** - you're already running multiple cohorts of different pathways, this is overdue
+2. **Dashboard improvements** - class selection UI, better filtering
 3. **Slack bot** - mentors will actually see alerts without checking anything
 4. **LMS abstraction** - not urgent, but TopHat is coming eventually
 5. **Predictions** - fun ML project, needs more historical data first
@@ -41,18 +41,17 @@ Mentors aren't going to check a dashboard every morning. But they're already in 
 
 A bot that drops in with "heads up, these 3 students haven't done anything in a week" would actually get seen. Weekly digests, completion rate updates, that kind of thing. High value, relatively low effort.
 
-## Multiple classes
+## Dashboard Improvements
 
-Right now you configure one class and that's it. But there are multiple cohorts, different tracks, and you want to see it all.
+Multi-class support is implemented in the backend, but the dashboard needs:
 
-Good news: the API already has `class_id` everywhere, so it's halfway there. Would need:
+- Class selection screen on load
+- Dropdown or cards to pick which class to view
+- Filter all visualizations by selected class
+- "Back to classes" navigation
+- Show/hide archived classes toggle
 
-- Config file that lists multiple classes
-- Sync that hits all of them
-- Labels so you know which is which (cohort name, track, start date)
-- Dashboard dropdown or something to switch views
-
-Then you can start asking interesting questions. How's this cohort doing compared to last one at the same point? Do the same assignments always cause problems?
+The API endpoints are ready (`/classes/:class_id/...`), just needs the UI work.
 
 ## TopHat and other LMSs
 

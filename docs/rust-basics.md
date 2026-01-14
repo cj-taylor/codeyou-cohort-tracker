@@ -142,11 +142,14 @@ Much cleaner than checking every error manually. The `?` says "if this fails, re
 ```rust
 // From our main.rs
 match cli.command {
-    cli::Commands::Init { email, password, class_id, api_base } => {
-        cli::handle_init(email, password, class_id, api_base).await?;
+    cli::Commands::Init { email, password, api_base } => {
+        cli::handle_init(email, password, api_base).await?;
     }
-    cli::Commands::Sync => {
-        cli::handle_sync(cli.config).await?;
+    cli::Commands::List { all } => {
+        cli::handle_list(all).await?;
+    }
+    cli::Commands::Sync { class } => {
+        cli::handle_sync(cli.config, class).await?;
     }
     cli::Commands::Status => {
         cli::handle_status(cli.config).await?;
