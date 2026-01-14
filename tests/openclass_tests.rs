@@ -107,8 +107,8 @@ fn test_rfc3339_methods() {
             assignment_type: "lesson".to_string(),
         },
         grade: Some(0.85),
-        started_assignment_at: "2025-01-01T10:00:00Z".to_string(),
-        completed_assignment_at: "2025-01-01T11:00:00Z".to_string(),
+        started_assignment_at: Some("2025-01-01T10:00:00Z".to_string()),
+        completed_assignment_at: Some("2025-01-01T11:00:00Z".to_string()),
         reviewed_at: Some("2025-01-01T12:00:00Z".to_string()),
     };
 

@@ -24,18 +24,21 @@ pub struct Progression {
     pub assignment: Assignment,
     #[serde(default)]
     pub grade: Option<f64>,
-    pub started_assignment_at: String,
-    pub completed_assignment_at: String,
+    #[serde(default)]
+    pub started_assignment_at: Option<String>,
+    #[serde(default)]
+    pub completed_assignment_at: Option<String>,
+    #[serde(default)]
     pub reviewed_at: Option<String>,
 }
 
 impl Progression {
     pub fn started_assignment_at_rfc3339(&self) -> String {
-        self.started_assignment_at.clone()
+        self.started_assignment_at.clone().unwrap_or_default()
     }
     
     pub fn completed_assignment_at_rfc3339(&self) -> String {
-        self.completed_assignment_at.clone()
+        self.completed_assignment_at.clone().unwrap_or_default()
     }
     
     pub fn reviewed_at_rfc3339(&self) -> Option<String> {
