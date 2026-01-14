@@ -2,5 +2,6 @@ pub mod api;
 pub mod cli;
 pub mod config;
 pub mod db;
-pub mod openclass;
+pub mod lms;
+pub mod models;
 pub mod sync;

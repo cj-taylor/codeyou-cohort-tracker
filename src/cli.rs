@@ -2,7 +2,6 @@ use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use crate::config::Config;
 use crate::db::Database;
-use crate::sync::OpenClassClient;
 use std::io::{self, Write};
 
 #[derive(Parser)]
@@ -44,6 +43,9 @@ pub enum Commands {
     Sync {
         #[arg(long)]
         class: Option<String>,
+        /// Full sync: fetch all data. Incremental sync: stop after 3 pages of duplicates
+        #[arg(long)]
+        full: bool,
     },
     
     Status,
@@ -83,11 +85,11 @@ pub async fn handle_init(
 
     // Authenticate and fetch classes
     println!("\nAuthenticating...");
-    let mut client = OpenClassClient::new(config);
-    client.authenticate().await?;
+    let mut provider = crate::lms::openclass::OpenClassProvider::new(config);
+    provider.authenticate().await?;
     
     println!("Fetching available classes...");
-    let classes = client.fetch_classes().await?;
+    let classes = provider.fetch_classes().await?;
 
     if classes.is_empty() {
         println!("No classes found for this account.");
@@ -142,7 +144,7 @@ pub async fn handle_init(
     Ok(())
 }
 
-pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<String>) -> Result<()> {
+pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<String>, full: bool) -> Result<()> {
     let path = config_path
         .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
 
@@ -156,24 +158,27 @@ pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<
     let db = Database::new(db_path.to_str().unwrap())?;
     println!("✓ Database initialized: {}", db_path.display());
 
-    // Create and authenticate client
-    let mut client = crate::sync::OpenClassClient::new(config.clone());
+    // Create provider and sync engine
+    let mut provider = Box::new(crate::lms::openclass::OpenClassProvider::new(config.clone()));
     println!("Authenticating with OpenClass...");
-    client.authenticate().await?;
+    provider.authenticate().await?;
     println!("✓ Authenticated");
 
+    let mut engine = crate::sync::SyncEngine::new(provider);
+
     // Sync specific class or all active classes
-    println!("Starting sync...");
+    let mode = if full { "full" } else { "incremental" };
+    println!("Starting {} sync...", mode);
     let start = std::time::Instant::now();
     
     let stats = if let Some(friendly_id) = class_friendly_id {
         // Sync specific class
         let class = db.get_class_by_friendly_id(&friendly_id)?;
         println!("Syncing class: {}", class.name);
-        client.sync_class(&class.id, &db).await?
+        engine.sync_class(&class.id, &db, full).await?
     } else {
         // Sync all active classes
-        client.sync_all(&db).await?
+        engine.sync_all(&db, full).await?
     };
     
     let duration = start.elapsed();
@@ -227,17 +232,14 @@ pub async fn handle_status(config_path: Option<String>) -> Result<()> {
 }
 
 pub async fn handle_server(config_path: Option<String>, port: u16) -> Result<()> {
-    let path = config_path
+    let _path = config_path
         .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
-
-    let config = Config::from_file(&path)?;
-    println!("Config: {}", path);
 
     let db_path = crate::config::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".cohort-tracker.db");
     
-    crate::api::start_server(config, db_path.to_str().unwrap(), port).await
+    crate::api::start_server(db_path.to_str().unwrap(), port).await
 }
 
 pub async fn handle_import(students_path: Option<String>, mentors_path: Option<String>) -> Result<()> {

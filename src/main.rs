@@ -1,12 +1,6 @@
-mod api;
-mod cli;
-mod config;
-mod db;
-mod openclass;
-mod sync;
-
 use anyhow::Result;
 use clap::Parser;
+use cohort_tracker::cli;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,8 +25,8 @@ async fn main() -> Result<()> {
         cli::Commands::Deactivate { friendly_ids } => {
             cli::handle_deactivate(friendly_ids).await?;
         }
-        cli::Commands::Sync { class } => {
-            cli::handle_sync(cli.config, class).await?;
+        cli::Commands::Sync { class, full } => {
+            cli::handle_sync(cli.config, class, full).await?;
         }
         cli::Commands::Status => {
             cli::handle_status(cli.config).await?;

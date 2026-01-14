@@ -2,29 +2,28 @@ use anyhow::Result;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Sse},
     routing::get,
     Json, Router,
 };
+use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
-use crate::config::Config;
+use crate::db::Database;
 #[allow(unused_imports)]
-use crate::db::{
-    Assignment, BlockerAssignment, Class, CompletionMetrics, Database, Mentor, NightSummary,
-    ProgressSummary, ProgressionRecord, Student, StudentActivity, StudentAssignmentStatus,
+use crate::models::{
+    Assignment, BlockerAssignment, Class, CompletionMetrics, DayOfWeekStats, Mentor, NightSummary,
+    ProgressSummary, ProgressionRecord, SectionProgress, Student, StudentActivity, StudentAssignmentStatus,
     StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
 };
 
-// Application state shared across all handlers
-#[allow(dead_code)]
 pub struct AppState {
     pub db: Mutex<Database>,
-    pub config: Config,  // Reserved for future use (e.g., triggering sync)
 }
 
 // Response types
@@ -205,6 +204,51 @@ async fn metrics_night_summary(
     Ok(Json(summary))
 }
 
+async fn metrics_day_of_week(
+    Path(class_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let stats = db.get_completions_by_day_of_week(&class_id)?;
+    Ok(Json(stats))
+}
+
+async fn student_day_of_week(
+    Path((class_id, student_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let stats = db.get_student_completions_by_day_of_week(&class_id, &student_id)?;
+    Ok(Json(stats))
+}
+
+async fn metrics_time_of_day(
+    Path(class_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let stats = db.get_completions_by_time_of_day(&class_id)?;
+    Ok(Json(stats))
+}
+
+async fn student_time_of_day(
+    Path((class_id, student_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let stats = db.get_student_completions_by_time_of_day(&class_id, &student_id)?;
+    Ok(Json(stats))
+}
+
+async fn metrics_section_progress(
+    Path(class_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<SectionProgress>>, ApiError> {
+    let db = state.db.lock().await;
+    let progress = db.get_section_progress(&class_id)?;
+    Ok(Json(progress))
+}
+
 async fn students_by_night(
     Path((class_id, night)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
@@ -249,6 +293,91 @@ async fn student_progress_timeline(
     Ok(Json(timeline))
 }
 
+async fn activate_class(
+    Path(class_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let db = state.db.lock().await;
+    db.set_class_active(&class_id, true)?;
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+async fn deactivate_class(
+    Path(class_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let db = state.db.lock().await;
+    db.set_class_active(&class_id, false)?;
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+async fn sync_class(
+    Path(class_id): Path<String>,
+) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
+    use tokio::process::Command;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::time::{timeout, Duration};
+    
+    let stream = async_stream::stream! {
+        let current_exe = std::env::current_exe().unwrap_or_else(|_| "cohort-tracker".into());
+        
+        yield Ok(axum::response::sse::Event::default().data(format!("Starting sync with: {:?}", current_exe)));
+        
+        let mut child = match Command::new(&current_exe)
+            .args(&["sync", "--class", &class_id])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn() {
+                Ok(c) => c,
+                Err(e) => {
+                    yield Ok(axum::response::sse::Event::default().data(format!("✗ Spawn error: {}", e)));
+                    return;
+                }
+            };
+        
+        if let Some(stderr) = child.stderr.take() {
+            let mut reader = BufReader::new(stderr).lines();
+            
+            loop {
+                match timeout(Duration::from_secs(2), reader.next_line()).await {
+                    Ok(Ok(Some(line))) => {
+                        if !line.trim().is_empty() {
+                            yield Ok(axum::response::sse::Event::default().data(line));
+                        }
+                    }
+                    Ok(Ok(None)) => break,
+                    Ok(Err(e)) => {
+                        yield Ok(axum::response::sse::Event::default().data(format!("Read error: {}", e)));
+                        break;
+                    }
+                    Err(_) => {
+                        // Timeout - continue waiting
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        match child.wait().await {
+            Ok(status) if status.success() => {
+                yield Ok(axum::response::sse::Event::default().data("✓ Sync complete"));
+            }
+            Ok(status) => {
+                yield Ok(axum::response::sse::Event::default().data(format!("✗ Sync failed with exit code: {:?}", status.code())));
+            }
+            Err(e) => {
+                yield Ok(axum::response::sse::Event::default().data(format!("✗ Wait error: {}", e)));
+            }
+        }
+    };
+    
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .text("keepalive")
+    )
+}
+
 // Build the router with all routes
 fn create_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
@@ -262,6 +391,9 @@ fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/classes", get(list_classes))
+        .route("/classes/:class_id/activate", axum::routing::post(activate_class))
+        .route("/classes/:class_id/deactivate", axum::routing::post(deactivate_class))
+        .route("/classes/:class_id/sync", get(sync_class))
         .route("/classes/:class_id/students", get(list_students))
         .route("/classes/:class_id/assignments", get(list_assignments))
         .route("/classes/:class_id/progressions", get(list_progressions))
@@ -273,11 +405,16 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route("/classes/:class_id/metrics/progress-over-time", get(metrics_progress_over_time))
         .route("/classes/:class_id/metrics/student-activity", get(metrics_student_activity))
         .route("/classes/:class_id/metrics/night-summary", get(metrics_night_summary))
+        .route("/classes/:class_id/metrics/day-of-week", get(metrics_day_of_week))
+        .route("/classes/:class_id/metrics/time-of-day", get(metrics_time_of_day))
+        .route("/classes/:class_id/metrics/section-progress", get(metrics_section_progress))
         .route("/classes/:class_id/students/night/:night", get(students_by_night))
         // Student detail endpoints
         .route("/classes/:class_id/students/:student_id/detail", get(student_detail))
         .route("/classes/:class_id/students/:student_id/assignments", get(student_assignments))
         .route("/classes/:class_id/students/:student_id/progress-timeline", get(student_progress_timeline))
+        .route("/classes/:class_id/students/:student_id/day-of-week", get(student_day_of_week))
+        .route("/classes/:class_id/students/:student_id/time-of-day", get(student_time_of_day))
         // Mentors
         .route("/mentors", get(list_mentors))
         // Dashboard (serve index.html at root)
@@ -287,13 +424,11 @@ fn create_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-// Start the API server
-pub async fn start_server(config: Config, db_path: &str, port: u16) -> Result<()> {
+pub async fn start_server(db_path: &str, port: u16) -> Result<()> {
     let db = Database::new(db_path)?;
 
     let state = Arc::new(AppState {
         db: Mutex::new(db),
-        config,
     });
 
     let app = create_router(state);
