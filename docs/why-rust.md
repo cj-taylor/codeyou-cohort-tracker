@@ -1,10 +1,6 @@
 # Why Rust? Our Technology Decisions
 
-So why did we pick Rust for this project? And what does that actually mean for you as a developer? Let me break it down.
-
-## The short answer
-
-We wanted something that wouldn't crash on us during long sync operations, and we wanted to learn something new. Rust delivers on both fronts, but it comes with a learning curve.
+Why Rust for this project? We wanted something that wouldn't crash during long sync operations, and we wanted to learn something new. Rust delivers on both fronts, but it comes with a learning curve.
 
 ## What's great about Rust
 
@@ -18,7 +14,7 @@ drop(data);  // Error: can't drop data while it's borrowed
 println!("{}", reference);
 ```
 
-No more mysterious crashes from null pointers or memory corruption. The compiler is like having a really pedantic code reviewer who never gets tired.
+No more mysterious crashes from null pointers or memory corruption. The compiler is like having a pedantic code reviewer who never gets tired.
 
 ### 2. **Errors are handled explicitly**
 

@@ -1,20 +1,20 @@
 # Getting Started
 
-Welcome! This guide will help you get the Cohort Tracker running and understand what it does. No Rust experience required to start.
+This guide will help you get the Cohort Tracker running. No Rust experience required to start.
 
 ## What Does This Thing Do?
 
-Cohort Tracker pulls student progress data from OpenClass.ai (a learning management system) and stores it locally in a database. Then it gives you:
+Cohort Tracker pulls student progress data from OpenClass.ai and stores it locally in a database. Then it gives you:
 
 - **A dashboard** to visualize student progress
 - **Analytics** to identify struggling students
 - **An API** to build your own tools
 
-Think of it as your own personal copy of the class data that you can query however you want.
+Think of it as your own copy of the class data that you can query however you want.
 
 ## Before You Start
 
-You'll need:
+You need:
 
 1. **Rust** - The programming language this is built with
    - Install from [rustup.rs](https://rustup.rs/)
@@ -27,7 +27,7 @@ You'll need:
 3. **A terminal** - Command line interface
    - Mac: Terminal app
    - Windows: PowerShell or Command Prompt
-   - Linux: You know what to do 😉
+   - Linux: You know what to do
 
 ## First Time Setup
 
@@ -44,9 +44,9 @@ cd cohort-tracker
 cargo build --release
 ```
 
-This compiles the Rust code into an executable. First time takes a few minutes while it downloads dependencies. Grab a coffee.
+This compiles the Rust code into an executable. First time takes a few minutes while it downloads dependencies.
 
-**What's happening?** Cargo (Rust's package manager) is downloading libraries and compiling everything. The `--release` flag makes it optimized and fast.
+Cargo (Rust's package manager) downloads libraries and compiles everything. The `--release` flag makes it optimized and fast.
 
 ### 3. Initialize with Your Credentials
 
@@ -54,7 +54,7 @@ This compiles the Rust code into an executable. First time takes a few minutes w
 cargo run -- init --email your@email.com --password yourpassword
 ```
 
-**What's happening?**
+This does three things:
 1. Saves your credentials to `~/.cohort-tracker.toml`
 2. Connects to OpenClass and fetches your classes
 3. Asks which classes you want to track
@@ -79,10 +79,7 @@ Type the class IDs you want (separated by commas) or just type `all`.
 cargo run -- sync
 ```
 
-**What's happening?**
-- Fetches student progress from OpenClass
-- Stores it in `~/.cohort-tracker.db` (SQLite database)
-- Shows progress as it goes
+This fetches student progress from OpenClass and stores it in `~/.cohort-tracker.db` (SQLite database). It shows progress as it goes.
 
 First sync takes a minute or two. Subsequent syncs are faster (they only fetch new data).
 
@@ -310,6 +307,4 @@ cargo run -- server        # Start API server
 
 - Check the [docs/](.) folder for detailed guides
 - Look at the code - it has comments where things get tricky
-- The Rust compiler is actually pretty helpful with error messages
-
-Welcome aboard! 🚀
+- The Rust compiler is helpful with error messages

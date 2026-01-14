@@ -1,10 +1,10 @@
 # Rust Basics for This Project
 
-New to Rust? No worries. This covers the key stuff you'll run into while working on Cohort Tracker.
+New to Rust? This covers the key concepts used in Cohort Tracker.
 
 ## What's Rust anyway?
 
-Rust is a programming language that's really picky about safety and performance. It catches a lot of bugs at compile time that would crash your program later. Think of it as having a very thorough code reviewer built into the compiler.
+Rust is a programming language focused on safety and performance. It catches a lot of bugs at compile time that would crash your program later. Think of it as having a thorough code reviewer built into the compiler.
 
 ## The important concepts
 
@@ -21,7 +21,7 @@ fn print_name(name: &String) {
 }
 ```
 
-**What you'll see:** Lots of `&str` and `&String` in our function parameters. These are borrowed references - we're just looking at the data, not taking ownership.
+The codebase uses `&str` and `&String` in function parameters. These are borrowed references - we're just looking at the data, not taking ownership.
 
 ### 2. Results (handling things that might fail)
 
@@ -42,7 +42,7 @@ match divide(10, 2) {
 }
 ```
 
-**In our code:** Every database call and API request returns a `Result`. You'll see this everywhere.
+Every database call and API request returns a `Result`.
 
 ### 3. Options (for things that might not exist)
 
@@ -57,7 +57,7 @@ if let Some(num) = maybe_number {
 }
 ```
 
-**In our code:** Database fields like `reviewed_at` use `Option<String>` since students might not have reviewed assignments yet.
+Database fields like `reviewed_at` use `Option<String>` since students might not have reviewed assignments yet.
 
 ### 4. Structs (custom data types)
 
@@ -81,7 +81,7 @@ impl Student {
 }
 ```
 
-**In our code:** We have structs for `Student`, `Assignment`, `Progression`, and more.
+We have structs for `Student`, `Assignment`, `Progression`, and more.
 
 ### 5. Traits (shared behavior)
 
@@ -98,7 +98,7 @@ impl Display for Student {
 }
 ```
 
-**In our code:** We use traits like `Serialize` and `Deserialize` to convert data to/from JSON.
+We use traits like `Serialize` and `Deserialize` to convert data to/from JSON.
 
 ### 6. Async/await (non-blocking operations)
 
@@ -120,9 +120,9 @@ async fn main() {
 }
 ```
 
-**In our code:** All the OpenClass API calls are async.
+All the OpenClass API calls are async.
 
-## Patterns you'll see everywhere
+## Common Patterns
 
 ### The `?` operator (error propagation)
 
@@ -207,7 +207,7 @@ pub struct Student { /* ... */ }
 use crate::models::Student;  // Import from our crate
 ```
 
-**In our code:** We split large files into modules (`db/`, `lms/`, `sync/`) to keep things organized.
+We split large files into modules (`db/`, `lms/`, `sync/`) to keep things organized.
 
 ### Re-exports
 
@@ -247,7 +247,7 @@ let provider: Box<dyn LmsProvider> = Box::new(OpenClass::new());
 let data = provider.fetch_data()?;  // Works with any provider!
 ```
 
-**In our code:** The sync engine uses `Box<dyn LmsProvider>` so it can work with OpenClass, TopHat, or any future provider.
+The sync engine uses `Box<dyn LmsProvider>` so it can work with OpenClass, TopHat, or any future provider.
 
 **Why `Box`?** Trait objects need to be behind a pointer because their size isn't known at compile time.
 
@@ -270,12 +270,10 @@ Once you understand these basics, check out:
 
 ## Tips for Learning Rust
 
-**The compiler is your friend.** Rust error messages are actually helpful. Read them carefully - they often tell you exactly how to fix the problem.
+**The compiler is your friend.** Rust error messages are helpful. Read them carefully - they often tell you exactly how to fix the problem.
 
 **Start small.** Don't try to understand everything at once. Pick one file and explore.
 
 **Experiment.** Change something and see what happens. The compiler will catch errors before they become bugs.
 
-**It gets easier.** The first week is tough. The second week is better. By week three, you'll start to see why people love Rust.
-
-Welcome to the Rust community! 🦀
+**It gets easier.** The first week is tough. The second week is better. By week three, the patterns start to click.

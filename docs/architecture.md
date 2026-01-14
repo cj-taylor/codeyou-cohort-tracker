@@ -37,7 +37,7 @@ cohort-tracker/
 
 ## Why This Structure?
 
-We started with everything in single files (`db.rs`, `sync.rs`), but as the project grew, we split them into modules. Here's why:
+We started with everything in single files (`db.rs`, `sync.rs`), but as the project grew, we split them into modules:
 
 - **Easier to navigate**: Find what you need faster
 - **Clear responsibilities**: Each file has one job
@@ -195,7 +195,7 @@ async fn list_students(
 
 ## Data Flow
 
-Here's how data moves through the system:
+Data moves through the system like this:
 
 ```
 1. CLI Command
@@ -273,7 +273,7 @@ We follow these guidelines:
 
 See [testing.md](./testing.md) for details.
 
-## Common Patterns You'll See
+## Common Patterns
 
 ### The `?` Operator
 

@@ -1,17 +1,17 @@
 # Documentation
 
-Welcome to the Cohort Tracker docs! Whether you're brand new to Rust or just new to this project, we've got you covered.
+Documentation for the Cohort Tracker project. Start with Getting Started if you're new, or jump to Architecture to understand how the code is organized.
 
 ## Start Here
 
-**👋 New to the project?** → [Getting Started](./getting-started.md)  
+**New to the project?** → [Getting Started](./getting-started.md)  
 Get it running in 10 minutes. No Rust experience needed.
 
-**🏗️ Want to understand the code?** → [Architecture](./architecture.md)  
+**Want to understand the code?** → [Architecture](./architecture.md)  
 Learn how the pieces fit together and why we organized it this way.
 
-**🦀 New to Rust?** → [Rust Basics](./rust-basics.md)  
-The Rust concepts you'll see in this codebase, explained simply.
+**New to Rust?** → [Rust Basics](./rust-basics.md)  
+The Rust concepts used in this codebase, explained simply.
 
 ## Guides by Topic
 
@@ -41,13 +41,13 @@ The Rust concepts you'll see in this codebase, explained simply.
 **I want to...**
 
 - **Get it running** → [Getting Started](./getting-started.md)
-- **Add a new CLI command** → [Development Guide](./development.md) + look at `src/cli.rs`
-- **Add a new database query** → [Database Schema](./database.md) + look at `src/db/queries.rs`
-- **Add a new API endpoint** → Look at `src/api.rs` (it's straightforward)
+- **Add a new CLI command** → [Development Guide](./development.md) and `src/cli.rs`
+- **Add a new database query** → [Database Schema](./database.md) and `src/db/queries.rs`
+- **Add a new API endpoint** → `src/api.rs`
 - **Support a new LMS** → [Architecture](./architecture.md) (LMS Provider section)
-- **Understand the sync logic** → [OpenClass API](./openclass-api.md) + `src/sync/engine.rs`
+- **Understand the sync logic** → [OpenClass API](./openclass-api.md) and `src/sync/engine.rs`
 - **Query the database directly** → [Database Schema](./database.md)
-- **Learn Rust** → [Rust Basics](./rust-basics.md) + [Why Rust?](./why-rust.md)
+- **Learn Rust** → [Rust Basics](./rust-basics.md) and [Why Rust?](./why-rust.md)
 
 ## Documentation Philosophy
 
@@ -80,18 +80,16 @@ See [Architecture](./architecture.md) for the full picture.
 
 ## Contributing to Docs
 
-Found something confusing? That's a bug! Here's how to help:
+Found something confusing? Here's how to help:
 
 1. **Ask questions** - If you're confused, others probably are too
 2. **Suggest improvements** - Open an issue or PR
-3. **Add examples** - Real code examples are gold
+3. **Add examples** - Real code examples help
 4. **Fix typos** - Every bit helps
-
-Good documentation is never finished. It evolves with the code and the people using it.
 
 ## Learning Path
 
-If you're new to both Rust and this project, here's a suggested path:
+If you're new to both Rust and this project, start here:
 
 1. **[Getting Started](./getting-started.md)** - Get it running
 2. **[Rust Basics](./rust-basics.md)** - Learn the language concepts
@@ -99,14 +97,12 @@ If you're new to both Rust and this project, here's a suggested path:
 4. **[Development Guide](./development.md)** - Make your first change
 5. **Pick a piece to dive deep** - Database, API, sync logic, etc.
 
-Don't try to understand everything at once. Pick one area and explore.
-
 ## Getting Help
 
 - **Read the code** - It has comments where things get tricky
-- **Check the docs** - You're in the right place!
-- **Ask questions** - Open an issue, we're friendly
-- **Experiment** - Change something and see what happens (the compiler will catch errors)
+- **Check the docs** - You're in the right place
+- **Ask questions** - Open an issue
+- **Experiment** - Change something and see what happens
 
 ## Quick Reference
 
@@ -125,5 +121,3 @@ cargo test                 # Run tests
 cargo build                # Build
 cargo run -- server        # Start API
 ```
-
-Happy coding! 🦀

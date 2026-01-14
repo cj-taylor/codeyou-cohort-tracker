@@ -1,4 +1,4 @@
-use cohort_tracker::openclass::*;
+use cohort_tracker::lms::openclass::{OpenClassProgression as Progression, ProgressionResponse, User, OpenClassAssignment as Assignment};
 use serde_json::json;
 
 #[test]

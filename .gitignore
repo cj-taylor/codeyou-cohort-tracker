@@ -25,6 +25,7 @@ Thumbs.db
 
 # Frontend
 static/node_modules/
+static/node_modules
 static/package-lock.json
 static/coverage/
 

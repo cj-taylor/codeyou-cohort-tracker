@@ -12,7 +12,7 @@ async fn test_config_and_database_integration() {
     // Test basic database operations with class_id
     db.insert_student("user123", "class1", "John", "Doe", "john@example.com")
         .unwrap();
-    db.insert_assignment("assign123", "class1", "Test Assignment", "lesson")
+    db.insert_assignment("assign123", "class1", "Test Assignment", "lesson", Some("Week 1"))
         .unwrap();
     db.insert_progression(
         "prog123",
