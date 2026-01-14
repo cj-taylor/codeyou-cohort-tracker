@@ -7,7 +7,6 @@ use std::path::PathBuf;
 pub struct Config {
     pub email: String,
     pub password: String,
-    pub class_id: String,
     pub api_base: String,
 }
 

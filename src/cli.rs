@@ -1,7 +1,9 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use crate::config::Config;
 use crate::db::Database;
+use crate::sync::OpenClassClient;
+use std::io::{self, Write};
 
 #[derive(Parser)]
 #[command(name = "cohort-tracker")]
@@ -21,14 +23,29 @@ pub enum Commands {
         email: String,
         #[arg(short, long)]
         password: String,
-        #[arg(long)]
-        class_id: String,
         /// API base URL (default: https://api.openclass.ai)
         #[arg(short, long, default_value = "https://api.openclass.ai")]
         api_base: String,
     },
 
-    Sync,
+    List {
+        #[arg(short, long)]
+        all: bool,
+    },
+
+    Activate {
+        friendly_ids: Vec<String>,
+    },
+
+    Deactivate {
+        friendly_ids: Vec<String>,
+    },
+
+    Sync {
+        #[arg(long)]
+        class: Option<String>,
+    },
+    
     Status,
 
     Server {
@@ -50,31 +67,82 @@ pub enum Commands {
 pub async fn handle_init(
     email: String,
     password: String,
-    class_id: String,
     api_base: String,
 ) -> Result<()> {
+    // Save credentials
     let config = Config {
-        email,
-        password,
-        class_id,
-        api_base,
+        email: email.clone(),
+        password: password.clone(),
+        api_base: api_base.clone(),
     };
 
     let config_path = Config::default_path();
     config.save(config_path.to_str().unwrap())?;
 
-    println!(
-        "✓ Configuration saved to {}",
-        config_path.display()
-    );
-    println!("  Email: {}", config.email);
-    println!("  Class ID: {}", config.class_id);
-    println!("\nRun 'cohort-tracker sync' to start syncing data");
+    println!("✓ Configuration saved to {}", config_path.display());
+
+    // Authenticate and fetch classes
+    println!("\nAuthenticating...");
+    let mut client = OpenClassClient::new(config);
+    client.authenticate().await?;
+    
+    println!("Fetching available classes...");
+    let classes = client.fetch_classes().await?;
+
+    if classes.is_empty() {
+        println!("No classes found for this account.");
+        return Ok(());
+    }
+
+    // Display classes
+    println!("\nFound {} classes:", classes.len());
+    for class in &classes {
+        println!("  - {}", class.friendly_id);
+    }
+
+    // Get user selection
+    println!("\nEnter friendly IDs to activate (comma-separated, or 'all'):");
+    println!("Example: data-analysis-pathway-module-1-aug-2,data-analysis-pathway-module-2-aug-2");
+    print!("> ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim();
+
+    // Parse selection
+    let active_friendly_ids: Vec<String> = if input == "all" {
+        classes.iter().map(|c| c.friendly_id.clone()).collect()
+    } else {
+        input.split(',').map(|s| s.trim().to_string()).collect()
+    };
+
+    // Store classes in database
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+
+    println!();
+    for class in &classes {
+        let is_active = active_friendly_ids.contains(&class.friendly_id);
+        let mut class_to_insert = class.clone();
+        class_to_insert.is_active = is_active;
+        db.insert_class(&class_to_insert)?;
+        
+        println!("  {} - {} ({})", 
+            if is_active { "✓" } else { "○" }, 
+            class.name,
+            class.friendly_id
+        );
+    }
+
+    println!("\n✓ Setup complete! Run 'cargo run -- sync' to fetch data.");
 
     Ok(())
 }
 
-pub async fn handle_sync(config_path: Option<String>) -> Result<()> {
+pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<String>) -> Result<()> {
     let path = config_path
         .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
 
@@ -82,8 +150,11 @@ pub async fn handle_sync(config_path: Option<String>) -> Result<()> {
     println!("Loading config from: {}", path);
 
     // Create database
-    let db = Database::new("cohort-tracker.db")?;
-    println!("✓ Database initialized: cohort-tracker.db");
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+    println!("✓ Database initialized: {}", db_path.display());
 
     // Create and authenticate client
     let mut client = crate::sync::OpenClassClient::new(config.clone());
@@ -91,10 +162,20 @@ pub async fn handle_sync(config_path: Option<String>) -> Result<()> {
     client.authenticate().await?;
     println!("✓ Authenticated");
 
-    // Sync all data
+    // Sync specific class or all active classes
     println!("Starting sync...");
     let start = std::time::Instant::now();
-    let stats = client.sync_all(&db).await?;
+    
+    let stats = if let Some(friendly_id) = class_friendly_id {
+        // Sync specific class
+        let class = db.get_class_by_friendly_id(&friendly_id)?;
+        println!("Syncing class: {}", class.name);
+        client.sync_class(&class.id, &db).await?
+    } else {
+        // Sync all active classes
+        client.sync_all(&db).await?
+    };
+    
     let duration = start.elapsed();
 
     println!("\n=== Sync Complete ===");
@@ -114,24 +195,33 @@ pub async fn handle_status(config_path: Option<String>) -> Result<()> {
 
     let config = Config::from_file(&path)?;
     println!("Config: {}", path);
-    println!("Class ID: {}", config.class_id);
     println!("Email: {}", config.email);
 
-    let db = Database::new("cohort-tracker.db")?;
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
 
-    let student_count = db.get_student_count()?;
-    let assignment_count = db.get_assignment_count()?;
-    let progression_count = db.get_progression_count()?;
-    let last_sync = db.get_last_sync()?;
+    // Show per-class stats
+    let classes = db.get_active_classes()?;
+    
+    if classes.is_empty() {
+        println!("\nNo active classes. Run 'init' or 'activate' first.");
+        return Ok(());
+    }
 
-    println!("\n=== Database Stats ===");
-    println!("Students: {}", student_count);
-    println!("Assignments: {}", assignment_count);
-    println!("Progressions: {}", progression_count);
-    println!(
-        "Last sync: {}",
-        last_sync.unwrap_or_else(|| "Never".to_string())
-    );
+    println!("\n=== Active Classes ===");
+    for class in classes {
+        let student_count = db.get_student_count_by_class(&class.id)?;
+        let assignment_count = db.get_assignment_count_by_class(&class.id)?;
+        let progression_count = db.get_progression_count_by_class(&class.id)?;
+
+        println!("\n{} ({})", class.name, class.friendly_id);
+        println!("  Students: {}", student_count);
+        println!("  Assignments: {}", assignment_count);
+        println!("  Progressions: {}", progression_count);
+        println!("  Last sync: {}", class.synced_at.as_deref().unwrap_or("never"));
+    }
 
     Ok(())
 }
@@ -142,17 +232,23 @@ pub async fn handle_server(config_path: Option<String>, port: u16) -> Result<()>
 
     let config = Config::from_file(&path)?;
     println!("Config: {}", path);
-    println!("Class ID: {}", config.class_id);
 
-    crate::api::start_server(config, "cohort-tracker.db", port).await
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    
+    crate::api::start_server(config, db_path.to_str().unwrap(), port).await
 }
 
 pub async fn handle_import(students_path: Option<String>, mentors_path: Option<String>) -> Result<()> {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
-    let db = Database::new("cohort-tracker.db")?;
-    println!("Database: cohort-tracker.db");
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+    println!("Database: {}", db_path.display());
 
     // Import students CSV
     if let Some(path) = students_path {
@@ -243,21 +339,93 @@ pub async fn handle_import(students_path: Option<String>, mentors_path: Option<S
     }
 
     // Show summary
-    println!("\n=== Current Night/Region Summary ===");
-    let summaries = db.get_night_summary()?;
-    if summaries.is_empty() {
-        println!("No night data assigned yet.");
+    println!("\n=== Import Complete ===");
+    println!("Night/region data has been imported. Use 'status' command to view per-class summaries.");
+
+    Ok(())
+}
+
+pub async fn handle_list(all: bool) -> Result<()> {
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+
+    let classes = if all {
+        db.get_classes()?
     } else {
-        for summary in summaries {
-            println!(
-                "\n{}: {} students, {} completions ({:.1}% avg)",
-                summary.night,
-                summary.student_count,
-                summary.total_completions,
-                summary.avg_completion_pct * 100.0
-            );
-            if !summary.mentors.is_empty() {
-                println!("  Mentors: {}", summary.mentors.join(", "));
+        db.get_active_classes()?
+    };
+
+    if classes.is_empty() {
+        println!("No classes found. Run 'init' first.");
+        return Ok(());
+    }
+
+    println!("{} classes:", if all { "All" } else { "Active" });
+    for class in classes {
+        let status = if class.is_active { "✓" } else { "○" };
+        let synced = class.synced_at.as_deref().unwrap_or("never");
+        println!("  {} {} ({}) - last synced: {}", 
+            status, 
+            class.name, 
+            class.friendly_id,
+            synced
+        );
+    }
+
+    Ok(())
+}
+
+pub async fn handle_activate(friendly_ids: Vec<String>) -> Result<()> {
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+
+    for friendly_id in friendly_ids {
+        match db.get_class_by_friendly_id(&friendly_id) {
+            Ok(class) => {
+                db.set_class_active(&class.id, true)?;
+                println!("✓ Activated: {} ({})", class.name, class.friendly_id);
+            }
+            Err(_) => {
+                eprintln!("✗ Error: Class '{}' not found", friendly_id);
+                eprintln!("\nAvailable classes:");
+                let classes = db.get_classes()?;
+                for class in classes {
+                    let status = if class.is_active { "active" } else { "inactive" };
+                    println!("  - {} ({})", class.friendly_id, status);
+                }
+                return Err(anyhow!("Invalid class friendly_id"));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn handle_deactivate(friendly_ids: Vec<String>) -> Result<()> {
+    let db_path = crate::config::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cohort-tracker.db");
+    let db = Database::new(db_path.to_str().unwrap())?;
+
+    for friendly_id in friendly_ids {
+        match db.get_class_by_friendly_id(&friendly_id) {
+            Ok(class) => {
+                db.set_class_active(&class.id, false)?;
+                println!("○ Deactivated: {} ({})", class.name, class.friendly_id);
+            }
+            Err(_) => {
+                eprintln!("✗ Error: Class '{}' not found", friendly_id);
+                eprintln!("\nAvailable classes:");
+                let classes = db.get_classes()?;
+                for class in classes {
+                    let status = if class.is_active { "active" } else { "inactive" };
+                    println!("  - {} ({})", class.friendly_id, status);
+                }
+                return Err(anyhow!("Invalid class friendly_id"));
             }
         }
     }

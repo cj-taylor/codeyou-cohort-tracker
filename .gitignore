@@ -21,4 +21,5 @@ cohort-tracker.toml
 Thumbs.db
 
 # Logs
-*.log
+*.logdocs/ignore/
+scripts/

@@ -18,13 +18,21 @@ async fn main() -> Result<()> {
         cli::Commands::Init {
             email,
             password,
-            class_id,
             api_base,
         } => {
-            cli::handle_init(email, password, class_id, api_base).await?;
+            cli::handle_init(email, password, api_base).await?;
         }
-        cli::Commands::Sync => {
-            cli::handle_sync(cli.config).await?;
+        cli::Commands::List { all } => {
+            cli::handle_list(all).await?;
+        }
+        cli::Commands::Activate { friendly_ids } => {
+            cli::handle_activate(friendly_ids).await?;
+        }
+        cli::Commands::Deactivate { friendly_ids } => {
+            cli::handle_deactivate(friendly_ids).await?;
+        }
+        cli::Commands::Sync { class } => {
+            cli::handle_sync(cli.config, class).await?;
         }
         cli::Commands::Status => {
             cli::handle_status(cli.config).await?;

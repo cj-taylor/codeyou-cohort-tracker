@@ -7,7 +7,6 @@ fn test_config_serialization() {
     let config = Config {
         email: "test@example.com".to_string(),
         password: "password123".to_string(),
-        class_id: "class123".to_string(),
         api_base: "https://api.openclass.ai".to_string(),
     };
 
@@ -16,7 +15,6 @@ fn test_config_serialization() {
     
     assert_eq!(config.email, parsed.email);
     assert_eq!(config.password, parsed.password);
-    assert_eq!(config.class_id, parsed.class_id);
     assert_eq!(config.api_base, parsed.api_base);
 }
 
@@ -25,7 +23,6 @@ fn test_config_save_and_load() {
     let config = Config {
         email: "test@example.com".to_string(),
         password: "password123".to_string(),
-        class_id: "class123".to_string(),
         api_base: "https://api.openclass.ai".to_string(),
     };
 
@@ -40,7 +37,6 @@ fn test_config_save_and_load() {
     
     assert_eq!(config.email, loaded.email);
     assert_eq!(config.password, loaded.password);
-    assert_eq!(config.class_id, loaded.class_id);
     assert_eq!(config.api_base, loaded.api_base);
 }
 

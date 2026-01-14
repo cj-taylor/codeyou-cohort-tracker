@@ -22,7 +22,6 @@ async fn test_authentication_success() {
     let config = Config {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
-        class_id: "class123".to_string(),
         api_base: mock_server.uri(),
     };
 
@@ -45,7 +44,6 @@ async fn test_authentication_failure() {
     let config = Config {
         email: "wrong@example.com".to_string(),
         password: "wrongpass".to_string(),
-        class_id: "class123".to_string(),
         api_base: mock_server.uri(),
     };
 
@@ -112,14 +110,13 @@ async fn test_fetch_progressions() {
     let config = Config {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
-        class_id: "class123".to_string(),
         api_base: mock_server.uri(),
     };
 
     let mut client = OpenClassClient::new(config);
     client.authenticate().await.unwrap();
     
-    let result = client.fetch_progressions(0).await;
+    let result = client.fetch_progressions("class123", 0).await;
     assert!(result.is_ok());
     
     let response = result.unwrap();

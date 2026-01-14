@@ -1,8 +1,6 @@
 use cohort_tracker::{config::Config, db::Database};
 use tempfile::NamedTempFile;
-use wiremock::
-    MockServer
-;
+use wiremock::MockServer;
 
 #[tokio::test]
 async fn test_config_and_database_integration() {
@@ -11,13 +9,14 @@ async fn test_config_and_database_integration() {
     let db_path = temp_file.path().to_str().unwrap();
     let db = Database::new(db_path).unwrap();
 
-    // Test basic database operations
-    db.insert_student("user123", "John", "Doe", "john@example.com")
+    // Test basic database operations with class_id
+    db.insert_student("user123", "class1", "John", "Doe", "john@example.com")
         .unwrap();
-    db.insert_assignment("assign123", "Test Assignment", "lesson")
+    db.insert_assignment("assign123", "class1", "Test Assignment", "lesson")
         .unwrap();
     db.insert_progression(
         "prog123",
+        "class1",
         "user123",
         "assign123",
         Some(0.85),
@@ -40,7 +39,6 @@ async fn test_config_with_mock_server() {
     let config = Config {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
-        class_id: "class123".to_string(),
         api_base: mock_server.uri(),
     };
 
