@@ -99,6 +99,25 @@
             color: #555;
             font-size: 0.85rem;
             text-transform: uppercase;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        th:hover {
+            background: #e5e7eb;
+        }
+        th.sortable::after {
+            content: ' ⇅';
+            opacity: 0.3;
+            font-size: 0.7rem;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
         }
         tr:hover {
             background: #f8fafc;
@@ -346,22 +365,19 @@
         .problem-item.low-grade {
             background: #fef3c7;
         }
-        .assignment-list {
-            max-height: 300px;
+        #student-assignments-table {
+            width: 100%;
+        }
+        #student-assignments-table tbody {
+            display: block;
+            max-height: 400px;
             overflow-y: auto;
         }
-        .assignment-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid #eee;
-        }
-        .assignment-item:last-child {
-            border-bottom: none;
-        }
-        .assignment-name {
-            flex: 1;
+        #student-assignments-table thead,
+        #student-assignments-table tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
         }
         .assignment-type {
             font-size: 0.75rem;
@@ -369,33 +385,137 @@
             background: #f0f0f0;
             padding: 2px 8px;
             border-radius: 4px;
-            margin-left: 10px;
-        }
-        .assignment-status {
-            width: 100px;
-            text-align: center;
         }
         .status-done {
             color: #10b981;
+            font-weight: 600;
         }
         .status-missing {
             color: #ef4444;
+            font-weight: 600;
         }
         .status-low {
             color: #f59e0b;
+            font-weight: 600;
         }
-        .assignment-grade {
-            width: 60px;
-            text-align: right;
+        /* Class Selection */
+        #class-selection {
+            max-width: 900px;
+            margin: 50px auto;
+        }
+        #class-selection header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .class-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .class-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .class-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+        .class-card.inactive {
+            opacity: 0.6;
+        }
+        .class-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        .class-card .friendly-id {
+            font-size: 0.85rem;
+            color: #666;
+            font-family: monospace;
+            background: #f8fafc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .class-card .status {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #10b981;
+        }
+        .class-card.inactive .status {
+            color: #666;
+        }
+        .class-card .synced-at {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 8px;
+        }
+        .show-archived {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .show-archived label {
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .show-archived input {
+            margin-right: 8px;
+        }
+        #dashboard {
+            display: none;
+        }
+        .back-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+        .back-button:hover {
+            background: #5a6fd6;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Class Selection Screen -->
+    <div id="class-selection">
         <header>
             <h1>Cohort Tracker Dashboard</h1>
-            <p id="sync-info" class="last-sync">Loading...</p>
+            <p style="opacity: 0.9; font-size: 0.95rem;">Select a class to view</p>
         </header>
+        <div class="class-grid" id="class-grid">
+            <div class="loading" style="grid-column: 1/-1; text-align: center; padding: 40px;">Loading classes...</div>
+        </div>
+        <div class="show-archived">
+            <label>
+                <input type="checkbox" id="show-archived" onchange="toggleArchivedClasses()">
+                Show inactive classes
+            </label>
+        </div>
+    </div>
+
+    <!-- Dashboard (hidden until class selected) -->
+    <div id="dashboard">
+        <div class="container">
+            <button class="back-button" onclick="backToClasses()">← Back to Classes</button>
+            <header>
+                <h1 id="class-name">Cohort Tracker Dashboard</h1>
+                <p id="sync-info" class="last-sync">Loading...</p>
+            </header>
 
         <div class="stats-grid" id="stats-grid">
             <div class="stat-card">
@@ -506,7 +626,43 @@
                 </div>
                 <div class="modal-section">
                     <h3>All Assignments</h3>
-                    <div class="assignment-list" id="assignment-list"></div>
+                    <table id="student-assignments-table">
+                        <thead>
+                            <tr>
+                                <th>Assignment</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Grade</th>
+                                <th>Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignment-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment Detail Modal -->
+        <div id="assignment-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-assignment-name">Assignment Details</h2>
+                    <button class="modal-close" onclick="closeAssignmentModal()">&times;</button>
+                </div>
+                <div id="modal-assignment-info" class="modal-info"></div>
+                <div class="modal-section">
+                    <h3>Student Completion Status</h3>
+                    <table id="assignment-students-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Status</th>
+                                <th>Grade</th>
+                                <th>Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignment-students-body"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -527,10 +683,84 @@
             </div>
         </div>
     </div>
+    </div>
 
     <script>
         const API_BASE = '';
-        const CLASS_ID = 'default';
+        let currentClassId = null;
+        let allClasses = [];
+
+        // Class Selection Functions
+        async function loadClasses() {
+            try {
+                const showArchived = document.getElementById('show-archived').checked;
+                const endpoint = showArchived ? '/classes?all=true' : '/classes';
+                const classes = await fetchData(endpoint);
+                
+                if (!classes || classes.length === 0) {
+                    document.getElementById('class-grid').innerHTML = 
+                        '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">No classes found. Run <code>cargo run -- init</code> to set up classes.</div>';
+                    return;
+                }
+
+                allClasses = classes;
+                renderClassGrid(classes);
+            } catch (error) {
+                console.error('Error loading classes:', error);
+                document.getElementById('class-grid').innerHTML = 
+                    '<div class="error" style="grid-column: 1/-1;">Failed to load classes. Make sure the server is running.</div>';
+            }
+        }
+
+        function renderClassGrid(classes) {
+            const grid = document.getElementById('class-grid');
+            grid.innerHTML = classes.map(cls => {
+                const syncedDate = cls.synced_at ? new Date(cls.synced_at).toLocaleString() : 'Never synced';
+                return `
+                    <div class="class-card ${cls.is_active ? '' : 'inactive'}" onclick="selectClass('${cls.id}', '${cls.name}')">
+                        <h3>${cls.name}</h3>
+                        <div class="friendly-id">${cls.friendly_id}</div>
+                        <div class="status">${cls.is_active ? '✓ Active' : '○ Inactive'}</div>
+                        <div class="synced-at">Last synced: ${syncedDate}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleArchivedClasses() {
+            loadClasses();
+        }
+
+        function selectClass(classId, className) {
+            currentClassId = classId;
+            localStorage.setItem('selectedClassId', classId);
+            localStorage.setItem('selectedClassName', className);
+            
+            document.getElementById('class-selection').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('class-name').textContent = className;
+            
+            init();
+        }
+
+        function backToClasses() {
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('class-selection').style.display = 'block';
+            currentClassId = null;
+            loadClasses();
+        }
+
+        // Check for previously selected class
+        function checkStoredClass() {
+            const storedClassId = localStorage.getItem('selectedClassId');
+            const storedClassName = localStorage.getItem('selectedClassName');
+            
+            if (storedClassId && storedClassName) {
+                selectClass(storedClassId, storedClassName);
+            } else {
+                loadClasses();
+            }
+        }
 
         async function fetchData(endpoint) {
             try {
@@ -557,22 +787,24 @@
             const data = await fetchData('/health');
             if (!data) return;
 
-            document.getElementById('stat-students').textContent = data.students;
-            document.getElementById('stat-assignments').textContent = data.assignments;
-            document.getElementById('stat-progressions').textContent = data.progressions.toLocaleString();
             document.getElementById('sync-info').textContent = `Last sync: ${formatDate(data.last_sync)}`;
         }
 
         async function loadSummary() {
-            const data = await fetchData(`/classes/${CLASS_ID}/progress-summary`);
+            const data = await fetchData(`/classes/${currentClassId}/progress-summary`);
             if (!data) return;
 
+            // Update class-specific counts
+            document.getElementById('stat-students').textContent = data.total_students;
+            document.getElementById('stat-assignments').textContent = data.total_assignments;
+            document.getElementById('stat-progressions').textContent = data.total_progressions.toLocaleString();
+            
             document.getElementById('stat-completion').textContent = formatPercent(data.completion_rate);
             document.getElementById('stat-avg-grade').textContent = data.avg_grade ? formatPercent(data.avg_grade) : 'N/A';
         }
 
         async function loadBlockers() {
-            const data = await fetchData(`/classes/${CLASS_ID}/metrics/blockers`);
+            const data = await fetchData(`/classes/${currentClassId}/metrics/blockers`);
             const tbody = document.getElementById('blockers-body');
 
             if (!data || data.length === 0) {
@@ -581,7 +813,7 @@
             }
 
             tbody.innerHTML = data.slice(0, 8).map(item => `
-                <tr>
+                <tr style="cursor:pointer;" onclick="openAssignmentModal('${item.assignment_id}', '${item.name.replace(/'/g, "\\'")}')">
                     <td title="${item.name}">${item.name.length > 35 ? item.name.substring(0, 35) + '...' : item.name}</td>
                     <td>
                         <div style="display:flex; align-items:center; gap:10px;">
@@ -597,7 +829,7 @@
         }
 
         async function loadStudentHealth() {
-            const data = await fetchData(`/classes/${CLASS_ID}/metrics/student-health`);
+            const data = await fetchData(`/classes/${currentClassId}/metrics/student-health`);
             const tbody = document.getElementById('risk-body');
 
             if (!data || data.length === 0) {
@@ -614,7 +846,7 @@
             }
 
             tbody.innerHTML = atRisk.map(student => `
-                <tr>
+                <tr style="cursor:pointer;" onclick="openStudentModal('${student.student_id}')">
                     <td>${student.first_name} ${student.last_name}</td>
                     <td>
                         <div style="display:flex; align-items:center; gap:10px;">
@@ -635,8 +867,8 @@
         async function loadStudentActivity() {
             const nightFilter = document.getElementById('night-filter').value;
             const endpoint = nightFilter
-                ? `/classes/${CLASS_ID}/metrics/student-activity?night=${nightFilter}`
-                : `/classes/${CLASS_ID}/metrics/student-activity`;
+                ? `/classes/${currentClassId}/metrics/student-activity?night=${nightFilter}`
+                : `/classes/${currentClassId}/metrics/student-activity`;
 
             const data = await fetchData(endpoint);
             const tbody = document.getElementById('activity-body');
@@ -727,7 +959,7 @@
             modal.style.display = 'flex';
 
             // Load student detail
-            const detail = await fetchData(`/classes/${CLASS_ID}/students/${studentId}/detail`);
+            const detail = await fetchData(`/classes/${currentClassId}/students/${studentId}/detail`);
             if (!detail) {
                 alert('Failed to load student details');
                 closeStudentModal();
@@ -766,8 +998,8 @@
 
             // Load assignments and timeline in parallel
             const [assignments, timeline] = await Promise.all([
-                fetchData(`/classes/${CLASS_ID}/students/${studentId}/assignments`),
-                fetchData(`/classes/${CLASS_ID}/students/${studentId}/progress-timeline`)
+                fetchData(`/classes/${currentClassId}/students/${studentId}/assignments`),
+                fetchData(`/classes/${currentClassId}/students/${studentId}/progress-timeline`)
             ]);
 
             // Render problem areas
@@ -806,14 +1038,26 @@
                         statusClass = 'status-done';
                         statusText = 'Done';
                     }
+                    
+                    const completedDate = a.completed_at ? new Date(a.completed_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    }) : '-';
+                    
                     return `
-                        <div class="assignment-item">
-                            <span class="assignment-name">${a.name}<span class="assignment-type">${a.assignment_type}</span></span>
-                            <span class="assignment-status ${statusClass}">${statusText}</span>
-                            <span class="assignment-grade">${a.grade ? formatPercent(a.grade) : '-'}</span>
-                        </div>
+                        <tr>
+                            <td>${a.name}</td>
+                            <td><span class="assignment-type">${a.assignment_type}</span></td>
+                            <td class="${statusClass}">${statusText}</td>
+                            <td>${a.grade ? formatPercent(a.grade) : '-'}</td>
+                            <td>${completedDate}</td>
+                        </tr>
                     `;
                 }).join('');
+                
+                // Initialize sorting for this table
+                initModalTableSorting();
             }
 
             // Render progress chart
@@ -872,8 +1116,82 @@
             }
         });
 
+        // Assignment Modal Functions
+        async function openAssignmentModal(assignmentId, assignmentName) {
+            const modal = document.getElementById('assignment-modal');
+            modal.style.display = 'flex';
+
+            document.getElementById('modal-assignment-name').textContent = assignmentName;
+            document.getElementById('modal-assignment-info').textContent = 'Loading student completion data...';
+
+            // Fetch all students and their status for this assignment
+            const students = await fetchData(`/classes/${currentClassId}/students`);
+            const progressions = await fetchData(`/classes/${currentClassId}/progressions`);
+
+            if (!students || !progressions) {
+                document.getElementById('modal-assignment-info').textContent = 'Failed to load data';
+                return;
+            }
+
+            // Build completion map
+            const completionMap = {};
+            progressions.forEach(p => {
+                if (p.assignment_id === assignmentId) {
+                    completionMap[p.student_id] = {
+                        completed: true,
+                        grade: p.grade,
+                        completed_at: p.completed_at
+                    };
+                }
+            });
+
+            // Count completions
+            const completed = Object.keys(completionMap).length;
+            const total = students.length;
+            document.getElementById('modal-assignment-info').innerHTML = 
+                `${completed} of ${total} students completed (${formatPercent(completed / total)})`;
+
+            // Render student list
+            const tbody = document.getElementById('assignment-students-body');
+            tbody.innerHTML = students.map(student => {
+                const completion = completionMap[student.id];
+                const statusClass = completion ? 'status-done' : 'status-missing';
+                const statusText = completion ? 'Completed' : 'Not Started';
+                const grade = completion?.grade ? formatPercent(completion.grade) : '-';
+                const completedDate = completion?.completed_at ? 
+                    new Date(completion.completed_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    }) : '-';
+
+                return `
+                    <tr>
+                        <td>${student.first_name} ${student.last_name}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>${grade}</td>
+                        <td>${completedDate}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Initialize sorting for this table
+            initAssignmentModalTableSorting();
+        }
+
+        function closeAssignmentModal() {
+            document.getElementById('assignment-modal').style.display = 'none';
+        }
+
+        // Close assignment modal on outside click
+        document.getElementById('assignment-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAssignmentModal();
+            }
+        });
+
         async function loadProgressChart() {
-            const data = await fetchData(`/classes/${CLASS_ID}/metrics/progress-over-time`);
+            const data = await fetchData(`/classes/${currentClassId}/metrics/progress-over-time`);
             if (!data || data.length === 0) return;
 
             const ctx = document.getElementById('progress-chart').getContext('2d');
@@ -942,7 +1260,7 @@
         }
 
         async function loadNightSummary() {
-            const data = await fetchData(`/classes/${CLASS_ID}/metrics/night-summary`);
+            const data = await fetchData(`/classes/${currentClassId}/metrics/night-summary`);
             const container = document.getElementById('night-summary-container');
 
             if (!data || data.length === 0) {
@@ -982,6 +1300,8 @@
 
         // Load all data
         async function init() {
+            if (!currentClassId) return;
+            
             await Promise.all([
                 loadHealth(),
                 loadSummary(),
@@ -991,12 +1311,158 @@
                 loadNightSummary(),
                 loadProgressChart()
             ]);
+            
+            // Initialize table sorting after data loads
+            initTableSorting();
         }
 
-        init();
+        // Table sorting functionality
+        function initTableSorting() {
+            const tables = ['blockers-table', 'risk-table', 'activity-table'];
+            
+            tables.forEach(tableId => {
+                const table = document.getElementById(tableId);
+                if (!table) return;
+                
+                const headers = table.querySelectorAll('th');
+                headers.forEach((header, index) => {
+                    // Skip action column
+                    if (header.textContent.trim() === 'Action') return;
+                    
+                    header.classList.add('sortable');
+                    header.dataset.column = index;
+                    header.dataset.order = 'none';
+                    
+                    header.addEventListener('click', () => {
+                        sortTable(tableId, index, header);
+                    });
+                });
+            });
+        }
 
-        // Auto-refresh every 60 seconds
-        setInterval(init, 60000);
+        function sortTable(tableId, columnIndex, headerElement) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Store original order if not already stored
+            if (!tbody.dataset.originalOrder) {
+                tbody.dataset.originalOrder = JSON.stringify(rows.map(r => r.outerHTML));
+            }
+            
+            // Cycle through: none → asc → desc → none
+            const currentOrder = headerElement.dataset.order || 'none';
+            let newOrder;
+            if (currentOrder === 'none') {
+                newOrder = 'asc';
+            } else if (currentOrder === 'asc') {
+                newOrder = 'desc';
+            } else {
+                newOrder = 'none';
+            }
+            
+            // Clear all sort indicators
+            table.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                th.dataset.order = 'none';
+            });
+            
+            // If returning to original order, restore it
+            if (newOrder === 'none') {
+                const originalRows = JSON.parse(tbody.dataset.originalOrder);
+                tbody.innerHTML = originalRows.join('');
+                return;
+            }
+            
+            // Set new sort indicator
+            headerElement.dataset.order = newOrder;
+            headerElement.classList.add(newOrder === 'asc' ? 'sort-asc' : 'sort-desc');
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aCell = a.cells[columnIndex];
+                const bCell = b.cells[columnIndex];
+                
+                if (!aCell || !bCell) return 0;
+                
+                // Get text content, handling nested elements
+                let aValue = aCell.textContent.trim();
+                let bValue = bCell.textContent.trim();
+                
+                // Handle special cases for "Days Inactive" column
+                if (aValue === 'Today') aValue = '0 days';
+                if (bValue === 'Today') bValue = '0 days';
+                if (aValue === 'No activity') aValue = '999999 days';
+                if (bValue === 'No activity') bValue = '999999 days';
+                
+                // Try to parse as number (handles percentages, counts, etc)
+                const aNum = parseFloat(aValue.replace(/[^0-9.-]/g, ''));
+                const bNum = parseFloat(bValue.replace(/[^0-9.-]/g, ''));
+                
+                let comparison = 0;
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    comparison = aNum - bNum;
+                } else {
+                    // For dates, try parsing
+                    const aDate = Date.parse(aValue);
+                    const bDate = Date.parse(bValue);
+                    if (!isNaN(aDate) && !isNaN(bDate)) {
+                        comparison = aDate - bDate;
+                    } else {
+                        comparison = aValue.localeCompare(bValue);
+                    }
+                }
+                
+                return newOrder === 'asc' ? comparison : -comparison;
+            });
+            
+            // Re-append sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // Initialize sorting for modal assignment table
+        function initModalTableSorting() {
+            const table = document.getElementById('student-assignments-table');
+            if (!table) return;
+            
+            const headers = table.querySelectorAll('th');
+            headers.forEach((header, index) => {
+                header.classList.add('sortable');
+                header.dataset.column = index;
+                header.dataset.order = 'none';
+                
+                header.addEventListener('click', () => {
+                    sortTable('student-assignments-table', index, header);
+                });
+            });
+        }
+
+        // Initialize sorting for assignment modal student table
+        function initAssignmentModalTableSorting() {
+            const table = document.getElementById('assignment-students-table');
+            if (!table) return;
+            
+            const headers = table.querySelectorAll('th');
+            headers.forEach((header, index) => {
+                header.classList.add('sortable');
+                header.dataset.column = index;
+                header.dataset.order = 'none';
+                
+                header.addEventListener('click', () => {
+                    sortTable('assignment-students-table', index, header);
+                });
+            });
+        }
+
+        // Initialize on page load
+        checkStoredClass();
+
+        // Auto-refresh every 60 seconds (only if dashboard is visible)
+        setInterval(() => {
+            if (currentClassId) {
+                init();
+            }
+        }, 60000);
     </script>
 </body>
 </html>
