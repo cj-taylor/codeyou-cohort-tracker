@@ -21,5 +21,13 @@ cohort-tracker.toml
 Thumbs.db
 
 # Logs
-*.logdocs/ignore/
+*.log
+
+# Frontend
+static/node_modules/
+static/package-lock.json
+static/coverage/
+
+# Documentation
+docs/ignore/
 scripts/
