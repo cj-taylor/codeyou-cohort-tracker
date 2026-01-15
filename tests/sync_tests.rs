@@ -1,14 +1,14 @@
 use cohort_tracker::{config::Config, sync::OpenClassClient};
 use serde_json::json;
 use wiremock::{
-    matchers::{method, path, header},
+    matchers::{header, method, path},
     Mock, MockServer, ResponseTemplate,
 };
 
 #[tokio::test]
 async fn test_authentication_success() {
     let mock_server = MockServer::start().await;
-    
+
     Mock::given(method("POST"))
         .and(path("/v1/auth/login"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -27,14 +27,14 @@ async fn test_authentication_success() {
 
     let mut client = OpenClassClient::new(config);
     let result = client.authenticate().await;
-    
+
     assert!(result.is_ok());
 }
 
 #[tokio::test]
 async fn test_authentication_failure() {
     let mock_server = MockServer::start().await;
-    
+
     Mock::given(method("POST"))
         .and(path("/v1/auth/login"))
         .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
@@ -49,14 +49,14 @@ async fn test_authentication_failure() {
 
     let mut client = OpenClassClient::new(config);
     let result = client.authenticate().await;
-    
+
     assert!(result.is_err());
 }
 
 #[tokio::test]
 async fn test_fetch_progressions() {
     let mock_server = MockServer::start().await;
-    
+
     // Mock auth endpoint
     Mock::given(method("POST"))
         .and(path("/v1/auth/login"))
@@ -115,10 +115,10 @@ async fn test_fetch_progressions() {
 
     let mut client = OpenClassClient::new(config);
     client.authenticate().await.unwrap();
-    
+
     let result = client.fetch_progressions("class123", 0).await;
     assert!(result.is_ok());
-    
+
     let response = result.unwrap();
     assert_eq!(response.data.len(), 1);
     assert_eq!(response.data[0].user.first_name, "John");

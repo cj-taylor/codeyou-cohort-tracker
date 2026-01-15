@@ -5,7 +5,7 @@ use cohort_tracker::cli;
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    
+
     let cli = cli::Cli::parse();
 
     match cli.command {

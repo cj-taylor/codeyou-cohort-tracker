@@ -113,16 +113,17 @@ See [Architecture](./docs/architecture.md) for the full picture.
 
 ## Features
 
-- ✅ Multi-class support
-- ✅ Incremental sync (fast updates)
-- ✅ Full sync option (complete refresh)
-- ✅ Student progress tracking
-- ✅ Risk level identification
-- ✅ Blocker assignment detection
-- ✅ Activity monitoring
-- ✅ REST API
-- ✅ Interactive dashboard
-- ✅ Local SQLite database
+- Multi-class support
+- Incremental sync (fast updates)
+- Full sync option (complete refresh)
+- Student progress tracking
+- Risk level identification
+- Blocker assignment detection
+- Activity monitoring
+- REST API
+- Interactive dashboard
+- Local SQLite database
+- Real-time sync progress with Server-Sent Events
 
 ## Contributing
 
