@@ -1,5 +1,5 @@
-use anyhow::{Result, anyhow};
 use super::Database;
+use anyhow::{anyhow, Result};
 
 // Import models from parent crate
 use crate::models::*;
@@ -15,12 +15,12 @@ impl Database {
             .bind(2, class.name.as_str())?
             .bind(3, class.friendly_id.as_str())?
             .bind(4, if class.is_active { 1 } else { 0 })?;
-        
+
         let stmt = match &class.synced_at {
             Some(s) => stmt.bind(5, s.as_str())?,
             None => stmt.bind(5, ())?,
         };
-        
+
         let mut stmt = stmt;
         stmt.next()?;
         Ok(())
@@ -28,7 +28,7 @@ impl Database {
 
     pub fn get_classes(&self) -> Result<Vec<Class>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, friendly_id, is_active, synced_at FROM classes ORDER BY name"
+            "SELECT id, name, friendly_id, is_active, synced_at FROM classes ORDER BY name",
         )?;
         let mut classes = Vec::new();
 
@@ -66,7 +66,7 @@ impl Database {
 
     pub fn get_class_by_friendly_id(&self, friendly_id: &str) -> Result<Class> {
         let stmt = self.conn.prepare(
-            "SELECT id, name, friendly_id, is_active, synced_at FROM classes WHERE friendly_id = ?"
+            "SELECT id, name, friendly_id, is_active, synced_at FROM classes WHERE friendly_id = ?",
         )?;
         let mut stmt = stmt.bind(1, friendly_id)?;
 
@@ -83,25 +83,32 @@ impl Database {
     }
 
     pub fn set_class_active(&self, id: &str, is_active: bool) -> Result<()> {
-        let stmt = self.conn.prepare("UPDATE classes SET is_active = ? WHERE id = ?")?;
-        let mut stmt = stmt
-            .bind(1, if is_active { 1 } else { 0 })?
-            .bind(2, id)?;
+        let stmt = self
+            .conn
+            .prepare("UPDATE classes SET is_active = ? WHERE id = ?")?;
+        let mut stmt = stmt.bind(1, if is_active { 1 } else { 0 })?.bind(2, id)?;
         stmt.next()?;
         Ok(())
     }
 
     pub fn update_class_sync_time(&self, id: &str, synced_at: &str) -> Result<()> {
-        let stmt = self.conn.prepare("UPDATE classes SET synced_at = ? WHERE id = ?")?;
-        let mut stmt = stmt
-            .bind(1, synced_at)?
-            .bind(2, id)?;
+        let stmt = self
+            .conn
+            .prepare("UPDATE classes SET synced_at = ? WHERE id = ?")?;
+        let mut stmt = stmt.bind(1, synced_at)?.bind(2, id)?;
         stmt.next()?;
         Ok(())
     }
 
     // Student operations
-    pub fn insert_student(&self, id: &str, class_id: &str, first_name: &str, last_name: &str, email: &str) -> Result<()> {
+    pub fn insert_student(
+        &self,
+        id: &str,
+        class_id: &str,
+        first_name: &str,
+        last_name: &str,
+        email: &str,
+    ) -> Result<()> {
         let stmt = self.conn.prepare(
             "INSERT OR IGNORE INTO students (id, class_id, first_name, last_name, email) VALUES (?, ?, ?, ?, ?)"
         )?;
@@ -157,7 +164,13 @@ impl Database {
         Ok(students)
     }
 
-    pub fn update_student_night(&self, first_name: &str, last_name: &str, region: &str, night: &str) -> Result<bool> {
+    pub fn update_student_night(
+        &self,
+        first_name: &str,
+        last_name: &str,
+        region: &str,
+        night: &str,
+    ) -> Result<bool> {
         let stmt = self.conn.prepare(
             "UPDATE students SET region = ?, night = ? WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)"
         )?;
@@ -175,7 +188,14 @@ impl Database {
     }
 
     // Assignment operations
-    pub fn insert_assignment(&self, id: &str, class_id: &str, name: &str, assignment_type: &str, section: Option<&str>) -> Result<()> {
+    pub fn insert_assignment(
+        &self,
+        id: &str,
+        class_id: &str,
+        name: &str,
+        assignment_type: &str,
+        section: Option<&str>,
+    ) -> Result<()> {
         let stmt = self.conn.prepare(
             "INSERT OR REPLACE INTO assignments (id, class_id, name, type, section) VALUES (?, ?, ?, ?, ?)"
         )?;
@@ -184,13 +204,13 @@ impl Database {
             .bind(2, class_id)?
             .bind(3, name)?
             .bind(4, assignment_type)?;
-        
+
         let mut stmt = if let Some(s) = section {
             stmt.bind(5, s)?
         } else {
             stmt.bind(5, ())?
         };
-        
+
         stmt.next()?;
         Ok(())
     }
@@ -244,9 +264,7 @@ impl Database {
             Some(g) => stmt.bind(5, g)?,
             None => stmt.bind(5, ())?,
         };
-        let stmt = stmt
-            .bind(6, started_at)?
-            .bind(7, completed_at)?;
+        let stmt = stmt.bind(6, started_at)?.bind(7, completed_at)?;
         let stmt = match reviewed_at {
             Some(r) => stmt.bind(8, r)?,
             None => stmt.bind(8, ())?,
@@ -284,8 +302,13 @@ impl Database {
         Ok(progressions)
     }
 
-    pub fn get_progression_ids_by_class(&self, class_id: &str) -> Result<std::collections::HashSet<String>> {
-        let stmt = self.conn.prepare("SELECT id FROM progressions WHERE class_id = ?")?;
+    pub fn get_progression_ids_by_class(
+        &self,
+        class_id: &str,
+    ) -> Result<std::collections::HashSet<String>> {
+        let stmt = self
+            .conn
+            .prepare("SELECT id FROM progressions WHERE class_id = ?")?;
         let mut stmt = stmt.bind(1, class_id)?;
         let mut ids = std::collections::HashSet::new();
 
@@ -298,12 +321,10 @@ impl Database {
 
     // Mentor operations
     pub fn import_mentor(&self, name: &str, night: &str) -> Result<()> {
-        let stmt = self.conn.prepare(
-            "INSERT INTO mentors (name, night) VALUES (?, ?)"
-        )?;
-        let mut stmt = stmt
-            .bind(1, name)?
-            .bind(2, night)?;
+        let stmt = self
+            .conn
+            .prepare("INSERT INTO mentors (name, night) VALUES (?, ?)")?;
+        let mut stmt = stmt.bind(1, name)?.bind(2, night)?;
         stmt.next()?;
         Ok(())
     }
@@ -314,7 +335,9 @@ impl Database {
     }
 
     pub fn get_all_mentors(&self) -> Result<Vec<Mentor>> {
-        let mut stmt = self.conn.prepare("SELECT id, name, night FROM mentors ORDER BY night, name")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, night FROM mentors ORDER BY night, name")?;
         let mut mentors = Vec::new();
 
         while let sqlite::State::Row = stmt.next()? {
@@ -330,14 +353,18 @@ impl Database {
 
     // Count operations
     pub fn get_student_count(&self) -> Result<i64> {
-        let mut stmt = self.conn.prepare("SELECT COUNT(DISTINCT id) FROM students")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(DISTINCT id) FROM students")?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
         Ok(count)
     }
 
     pub fn get_student_count_by_class(&self, class_id: &str) -> Result<i64> {
-        let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ?")?;
+        let stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM students WHERE class_id = ?")?;
         let mut stmt = stmt.bind(1, class_id)?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
@@ -345,14 +372,18 @@ impl Database {
     }
 
     pub fn get_assignment_count(&self) -> Result<i64> {
-        let mut stmt = self.conn.prepare("SELECT COUNT(DISTINCT id) FROM assignments")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(DISTINCT id) FROM assignments")?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
         Ok(count)
     }
 
     pub fn get_assignment_count_by_class(&self, class_id: &str) -> Result<i64> {
-        let stmt = self.conn.prepare("SELECT COUNT(*) FROM assignments WHERE class_id = ?")?;
+        let stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM assignments WHERE class_id = ?")?;
         let mut stmt = stmt.bind(1, class_id)?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
@@ -367,7 +398,9 @@ impl Database {
     }
 
     pub fn get_progression_count_by_class(&self, class_id: &str) -> Result<i64> {
-        let stmt = self.conn.prepare("SELECT COUNT(*) FROM progressions WHERE class_id = ?")?;
+        let stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM progressions WHERE class_id = ?")?;
         let mut stmt = stmt.bind(1, class_id)?;
         stmt.next()?;
         let count = stmt.read::<i64>(0)?;
@@ -394,7 +427,9 @@ impl Database {
     }
 
     pub fn get_last_sync_timestamp(&self) -> Result<Option<i64>> {
-        let mut stmt = self.conn.prepare("SELECT synced_at FROM sync_history ORDER BY synced_at DESC LIMIT 1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT synced_at FROM sync_history ORDER BY synced_at DESC LIMIT 1")?;
         match stmt.next()? {
             sqlite::State::Row => {
                 let ts = stmt.read::<i64>(0)?;

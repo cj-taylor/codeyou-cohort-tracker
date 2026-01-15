@@ -1,8 +1,8 @@
-use anyhow::Result;
-use std::time::Duration;
-use crate::sync::types::SyncStats;
 use crate::db::Database;
 use crate::lms::LmsProvider;
+use crate::sync::types::SyncStats;
+use anyhow::Result;
+use std::time::Duration;
 
 pub struct SyncEngine {
     provider: Box<dyn LmsProvider>,
@@ -15,7 +15,7 @@ impl SyncEngine {
 
     pub async fn sync_all(&mut self, db: &Database, full: bool) -> Result<SyncStats> {
         let active_classes = db.get_active_classes()?;
-        
+
         if active_classes.is_empty() {
             println!("No active classes found. Run 'init' or 'activate' first.");
             return Ok(SyncStats::default());
@@ -26,10 +26,15 @@ impl SyncEngine {
         let mut total_stats = SyncStats::default();
 
         for (i, class) in active_classes.iter().enumerate() {
-            println!("=== [{}/{}] Syncing: {} ===", i + 1, active_classes.len(), class.name);
+            println!(
+                "=== [{}/{}] Syncing: {} ===",
+                i + 1,
+                active_classes.len(),
+                class.name
+            );
             let class_stats = self.sync_class(&class.id, db, full).await?;
             total_stats.merge(class_stats);
-            
+
             let now = chrono::Utc::now().to_rfc3339();
             db.update_class_sync_time(&class.id, &now)?;
         }
@@ -41,7 +46,12 @@ impl SyncEngine {
         Ok(total_stats)
     }
 
-    pub async fn sync_class(&mut self, class_id: &str, db: &Database, full: bool) -> Result<SyncStats> {
+    pub async fn sync_class(
+        &mut self,
+        class_id: &str,
+        db: &Database,
+        full: bool,
+    ) -> Result<SyncStats> {
         let mut stats = SyncStats::default();
 
         println!("Fetching class structure...");
@@ -57,7 +67,10 @@ impl SyncEngine {
         };
 
         let mut existing_progressions = db.get_progression_ids_by_class(class_id)?;
-        println!("Found {} existing progressions in database", existing_progressions.len());
+        println!(
+            "Found {} existing progressions in database",
+            existing_progressions.len()
+        );
 
         let mut page = 0;
         let mut consecutive_all_duplicate_pages = 0;
@@ -95,7 +108,9 @@ impl SyncEngine {
                 )?;
                 stats.students_inserted += 1;
 
-                let section = assignment_sections.get(&progression.assignment.id).map(|s| s.as_str());
+                let section = assignment_sections
+                    .get(&progression.assignment.id)
+                    .map(|s| s.as_str());
                 db.insert_assignment(
                     &progression.assignment.id,
                     class_id,
@@ -126,7 +141,12 @@ impl SyncEngine {
             stats.pages_fetched += 1;
             page += 1;
 
-            println!("  Page {}: {} new, {} duplicates", page - 1, new_records, duplicate_records);
+            println!(
+                "  Page {}: {} new, {} duplicates",
+                page - 1,
+                new_records,
+                duplicate_records
+            );
 
             if new_records == 0 && duplicate_records > 0 {
                 consecutive_all_duplicate_pages += 1;
@@ -135,7 +155,10 @@ impl SyncEngine {
             }
 
             if !full && consecutive_all_duplicate_pages >= MAX_DUPLICATE_PAGES {
-                println!("  Stopping: {} consecutive pages of all duplicates (incremental sync)", MAX_DUPLICATE_PAGES);
+                println!(
+                    "  Stopping: {} consecutive pages of all duplicates (incremental sync)",
+                    MAX_DUPLICATE_PAGES
+                );
                 break;
             }
 
@@ -149,8 +172,14 @@ impl SyncEngine {
         println!("\n✓ Class sync complete:");
         println!("  Pages fetched: {}", stats.pages_fetched);
         println!("  Total records: {}", stats.total_records);
-        println!("  Students: {} (unique)", db.get_student_count_by_class(class_id)?);
-        println!("  Assignments: {} (unique)", db.get_assignment_count_by_class(class_id)?);
+        println!(
+            "  Students: {} (unique)",
+            db.get_student_count_by_class(class_id)?
+        );
+        println!(
+            "  Assignments: {} (unique)",
+            db.get_assignment_count_by_class(class_id)?
+        );
         println!("  Progressions: {}", stats.progressions_inserted);
 
         Ok(stats)

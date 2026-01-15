@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow};
-use clap::{Parser, Subcommand};
 use crate::config::Config;
 use crate::db::Database;
+use anyhow::{anyhow, Result};
+use clap::{Parser, Subcommand};
 use std::io::{self, Write};
 
 #[derive(Parser)]
@@ -47,7 +47,7 @@ pub enum Commands {
         #[arg(long)]
         full: bool,
     },
-    
+
     Status,
 
     Server {
@@ -66,11 +66,7 @@ pub enum Commands {
     },
 }
 
-pub async fn handle_init(
-    email: String,
-    password: String,
-    api_base: String,
-) -> Result<()> {
+pub async fn handle_init(email: String, password: String, api_base: String) -> Result<()> {
     // Save credentials
     let config = Config {
         email: email.clone(),
@@ -87,7 +83,7 @@ pub async fn handle_init(
     println!("\nAuthenticating...");
     let mut provider = crate::lms::openclass::OpenClassProvider::new(config);
     provider.authenticate().await?;
-    
+
     println!("Fetching available classes...");
     let classes = provider.fetch_classes().await?;
 
@@ -131,9 +127,10 @@ pub async fn handle_init(
         let mut class_to_insert = class.clone();
         class_to_insert.is_active = is_active;
         db.insert_class(&class_to_insert)?;
-        
-        println!("  {} - {} ({})", 
-            if is_active { "✓" } else { "○" }, 
+
+        println!(
+            "  {} - {} ({})",
+            if is_active { "✓" } else { "○" },
             class.name,
             class.friendly_id
         );
@@ -144,9 +141,12 @@ pub async fn handle_init(
     Ok(())
 }
 
-pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<String>, full: bool) -> Result<()> {
-    let path = config_path
-        .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
+pub async fn handle_sync(
+    config_path: Option<String>,
+    class_friendly_id: Option<String>,
+    full: bool,
+) -> Result<()> {
+    let path = config_path.unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
 
     let config = Config::from_file(&path)?;
     println!("Loading config from: {}", path);
@@ -159,7 +159,9 @@ pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<
     println!("✓ Database initialized: {}", db_path.display());
 
     // Create provider and sync engine
-    let mut provider = Box::new(crate::lms::openclass::OpenClassProvider::new(config.clone()));
+    let mut provider = Box::new(crate::lms::openclass::OpenClassProvider::new(
+        config.clone(),
+    ));
     println!("Authenticating with OpenClass...");
     provider.authenticate().await?;
     println!("✓ Authenticated");
@@ -170,7 +172,7 @@ pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<
     let mode = if full { "full" } else { "incremental" };
     println!("Starting {} sync...", mode);
     let start = std::time::Instant::now();
-    
+
     let stats = if let Some(friendly_id) = class_friendly_id {
         // Sync specific class
         let class = db.get_class_by_friendly_id(&friendly_id)?;
@@ -180,7 +182,7 @@ pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<
         // Sync all active classes
         engine.sync_all(&db, full).await?
     };
-    
+
     let duration = start.elapsed();
 
     println!("\n=== Sync Complete ===");
@@ -195,8 +197,7 @@ pub async fn handle_sync(config_path: Option<String>, class_friendly_id: Option<
 }
 
 pub async fn handle_status(config_path: Option<String>) -> Result<()> {
-    let path = config_path
-        .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
+    let path = config_path.unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
 
     let config = Config::from_file(&path)?;
     println!("Config: {}", path);
@@ -209,7 +210,7 @@ pub async fn handle_status(config_path: Option<String>) -> Result<()> {
 
     // Show per-class stats
     let classes = db.get_active_classes()?;
-    
+
     if classes.is_empty() {
         println!("\nNo active classes. Run 'init' or 'activate' first.");
         return Ok(());
@@ -225,24 +226,29 @@ pub async fn handle_status(config_path: Option<String>) -> Result<()> {
         println!("  Students: {}", student_count);
         println!("  Assignments: {}", assignment_count);
         println!("  Progressions: {}", progression_count);
-        println!("  Last sync: {}", class.synced_at.as_deref().unwrap_or("never"));
+        println!(
+            "  Last sync: {}",
+            class.synced_at.as_deref().unwrap_or("never")
+        );
     }
 
     Ok(())
 }
 
 pub async fn handle_server(config_path: Option<String>, port: u16) -> Result<()> {
-    let _path = config_path
-        .unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
+    let _path = config_path.unwrap_or_else(|| Config::default_path().to_str().unwrap().to_string());
 
     let db_path = crate::config::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".cohort-tracker.db");
-    
+
     crate::api::start_server(db_path.to_str().unwrap(), port).await
 }
 
-pub async fn handle_import(students_path: Option<String>, mentors_path: Option<String>) -> Result<()> {
+pub async fn handle_import(
+    students_path: Option<String>,
+    mentors_path: Option<String>,
+) -> Result<()> {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
@@ -284,7 +290,10 @@ pub async fn handle_import(students_path: Option<String>, mentors_path: Option<S
                 match db.update_student_night(first_name, last_name, region, night)? {
                     true => {
                         updated += 1;
-                        println!("  Updated: {} {} -> {} ({})", first_name, last_name, night, region);
+                        println!(
+                            "  Updated: {} {} -> {} ({})",
+                            first_name, last_name, night, region
+                        );
                     }
                     false => {
                         not_found += 1;
@@ -342,7 +351,9 @@ pub async fn handle_import(students_path: Option<String>, mentors_path: Option<S
 
     // Show summary
     println!("\n=== Import Complete ===");
-    println!("Night/region data has been imported. Use 'status' command to view per-class summaries.");
+    println!(
+        "Night/region data has been imported. Use 'status' command to view per-class summaries."
+    );
 
     Ok(())
 }
@@ -368,11 +379,9 @@ pub async fn handle_list(all: bool) -> Result<()> {
     for class in classes {
         let status = if class.is_active { "✓" } else { "○" };
         let synced = class.synced_at.as_deref().unwrap_or("never");
-        println!("  {} {} ({}) - last synced: {}", 
-            status, 
-            class.name, 
-            class.friendly_id,
-            synced
+        println!(
+            "  {} {} ({}) - last synced: {}",
+            status, class.name, class.friendly_id, synced
         );
     }
 
@@ -396,7 +405,11 @@ pub async fn handle_activate(friendly_ids: Vec<String>) -> Result<()> {
                 eprintln!("\nAvailable classes:");
                 let classes = db.get_classes()?;
                 for class in classes {
-                    let status = if class.is_active { "active" } else { "inactive" };
+                    let status = if class.is_active {
+                        "active"
+                    } else {
+                        "inactive"
+                    };
                     println!("  - {} ({})", class.friendly_id, status);
                 }
                 return Err(anyhow!("Invalid class friendly_id"));
@@ -424,7 +437,11 @@ pub async fn handle_deactivate(friendly_ids: Vec<String>) -> Result<()> {
                 eprintln!("\nAvailable classes:");
                 let classes = db.get_classes()?;
                 for class in classes {
-                    let status = if class.is_active { "active" } else { "inactive" };
+                    let status = if class.is_active {
+                        "active"
+                    } else {
+                        "inactive"
+                    };
                     println!("  - {} ({})", class.friendly_id, status);
                 }
                 return Err(anyhow!("Invalid class friendly_id"));

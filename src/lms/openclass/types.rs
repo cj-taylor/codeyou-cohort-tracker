@@ -36,11 +36,11 @@ impl Progression {
     pub fn started_assignment_at_rfc3339(&self) -> String {
         self.started_assignment_at.clone().unwrap_or_default()
     }
-    
+
     pub fn completed_assignment_at_rfc3339(&self) -> String {
         self.completed_assignment_at.clone().unwrap_or_default()
     }
-    
+
     pub fn reviewed_at_rfc3339(&self) -> Option<String> {
         self.reviewed_at.clone()
     }
@@ -60,4 +60,3 @@ pub struct Metadata {
     results_per_page: i32,
     pub can_load_more: bool,
 }
-

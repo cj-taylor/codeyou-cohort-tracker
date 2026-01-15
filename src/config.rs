@@ -12,8 +12,8 @@ pub struct Config {
 
 impl Config {
     pub fn from_file(path: &str) -> Result<Self> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| anyhow!("Failed to read config file: {}", e))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| anyhow!("Failed to read config file: {}", e))?;
         toml::from_str(&content).map_err(|e| anyhow!("Failed to parse config: {}", e))
     }
 

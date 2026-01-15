@@ -1,4 +1,7 @@
-use cohort_tracker::lms::openclass::{OpenClassProgression as Progression, ProgressionResponse, User, OpenClassAssignment as Assignment};
+use cohort_tracker::lms::openclass::{
+    OpenClassAssignment as Assignment, OpenClassProgression as Progression, ProgressionResponse,
+    User,
+};
 use serde_json::json;
 
 #[test]
@@ -23,7 +26,7 @@ fn test_progression_deserialization() {
     });
 
     let progression: Progression = serde_json::from_value(json_data).unwrap();
-    
+
     assert_eq!(progression.user.id, "user123");
     assert_eq!(progression.user.first_name, "John");
     assert_eq!(progression.assignment.name, "Test Assignment");
@@ -61,7 +64,7 @@ fn test_progression_response_deserialization() {
     });
 
     let response: ProgressionResponse = serde_json::from_value(json_data).unwrap();
-    
+
     assert_eq!(response.data.len(), 1);
     assert!(response.metadata.can_load_more);
     assert_eq!(response.data[0].user.first_name, "John");
@@ -112,7 +115,16 @@ fn test_rfc3339_methods() {
         reviewed_at: Some("2025-01-01T12:00:00Z".to_string()),
     };
 
-    assert_eq!(progression.started_assignment_at_rfc3339(), "2025-01-01T10:00:00Z");
-    assert_eq!(progression.completed_assignment_at_rfc3339(), "2025-01-01T11:00:00Z");
-    assert_eq!(progression.reviewed_at_rfc3339(), Some("2025-01-01T12:00:00Z".to_string()));
+    assert_eq!(
+        progression.started_assignment_at_rfc3339(),
+        "2025-01-01T10:00:00Z"
+    );
+    assert_eq!(
+        progression.completed_assignment_at_rfc3339(),
+        "2025-01-01T11:00:00Z"
+    );
+    assert_eq!(
+        progression.reviewed_at_rfc3339(),
+        Some("2025-01-01T12:00:00Z".to_string())
+    );
 }

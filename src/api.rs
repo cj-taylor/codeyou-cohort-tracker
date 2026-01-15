@@ -18,8 +18,8 @@ use crate::db::Database;
 #[allow(unused_imports)]
 use crate::models::{
     Assignment, BlockerAssignment, Class, CompletionMetrics, DayOfWeekStats, Mentor, NightSummary,
-    ProgressSummary, ProgressionRecord, SectionProgress, Student, StudentActivity, StudentAssignmentStatus,
-    StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
+    ProgressSummary, ProgressionRecord, SectionProgress, Student, StudentActivity,
+    StudentAssignmentStatus, StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
 };
 
 pub struct AppState {
@@ -187,9 +187,7 @@ async fn metrics_student_activity(
     Ok(Json(activity))
 }
 
-async fn list_mentors(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<Mentor>>, ApiError> {
+async fn list_mentors(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Mentor>>, ApiError> {
     let db = state.db.lock().await;
     let mentors = db.get_all_mentors()?;
     Ok(Json(mentors))
@@ -314,15 +312,15 @@ async fn deactivate_class(
 async fn sync_class(
     Path(class_id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
-    use tokio::process::Command;
     use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
     use tokio::time::{timeout, Duration};
-    
+
     let stream = async_stream::stream! {
         let current_exe = std::env::current_exe().unwrap_or_else(|_| "cohort-tracker".into());
-        
+
         yield Ok(axum::response::sse::Event::default().data(format!("Starting sync with: {:?}", current_exe)));
-        
+
         let mut child = match Command::new(&current_exe)
             .args(&["sync", "--class", &class_id])
             .stdout(std::process::Stdio::piped())
@@ -334,10 +332,10 @@ async fn sync_class(
                     return;
                 }
             };
-        
+
         if let Some(stderr) = child.stderr.take() {
             let mut reader = BufReader::new(stderr).lines();
-            
+
             loop {
                 match timeout(Duration::from_secs(2), reader.next_line()).await {
                     Ok(Ok(Some(line))) => {
@@ -357,7 +355,7 @@ async fn sync_class(
                 }
             }
         }
-        
+
         match child.wait().await {
             Ok(status) if status.success() => {
                 yield Ok(axum::response::sse::Event::default().data("✓ Sync complete"));
@@ -370,11 +368,11 @@ async fn sync_class(
             }
         }
     };
-    
+
     Sse::new(stream).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(Duration::from_secs(1))
-            .text("keepalive")
+            .text("keepalive"),
     )
 }
 
@@ -391,30 +389,78 @@ fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/classes", get(list_classes))
-        .route("/classes/:class_id/activate", axum::routing::post(activate_class))
-        .route("/classes/:class_id/deactivate", axum::routing::post(deactivate_class))
+        .route(
+            "/classes/:class_id/activate",
+            axum::routing::post(activate_class),
+        )
+        .route(
+            "/classes/:class_id/deactivate",
+            axum::routing::post(deactivate_class),
+        )
         .route("/classes/:class_id/sync", get(sync_class))
         .route("/classes/:class_id/students", get(list_students))
         .route("/classes/:class_id/assignments", get(list_assignments))
         .route("/classes/:class_id/progressions", get(list_progressions))
         .route("/classes/:class_id/progress-summary", get(progress_summary))
         // Analytics endpoints
-        .route("/classes/:class_id/metrics/completion", get(metrics_completion))
+        .route(
+            "/classes/:class_id/metrics/completion",
+            get(metrics_completion),
+        )
         .route("/classes/:class_id/metrics/blockers", get(metrics_blockers))
-        .route("/classes/:class_id/metrics/student-health", get(metrics_student_health))
-        .route("/classes/:class_id/metrics/progress-over-time", get(metrics_progress_over_time))
-        .route("/classes/:class_id/metrics/student-activity", get(metrics_student_activity))
-        .route("/classes/:class_id/metrics/night-summary", get(metrics_night_summary))
-        .route("/classes/:class_id/metrics/day-of-week", get(metrics_day_of_week))
-        .route("/classes/:class_id/metrics/time-of-day", get(metrics_time_of_day))
-        .route("/classes/:class_id/metrics/section-progress", get(metrics_section_progress))
-        .route("/classes/:class_id/students/night/:night", get(students_by_night))
+        .route(
+            "/classes/:class_id/metrics/student-health",
+            get(metrics_student_health),
+        )
+        .route(
+            "/classes/:class_id/metrics/progress-over-time",
+            get(metrics_progress_over_time),
+        )
+        .route(
+            "/classes/:class_id/metrics/student-activity",
+            get(metrics_student_activity),
+        )
+        .route(
+            "/classes/:class_id/metrics/night-summary",
+            get(metrics_night_summary),
+        )
+        .route(
+            "/classes/:class_id/metrics/day-of-week",
+            get(metrics_day_of_week),
+        )
+        .route(
+            "/classes/:class_id/metrics/time-of-day",
+            get(metrics_time_of_day),
+        )
+        .route(
+            "/classes/:class_id/metrics/section-progress",
+            get(metrics_section_progress),
+        )
+        .route(
+            "/classes/:class_id/students/night/:night",
+            get(students_by_night),
+        )
         // Student detail endpoints
-        .route("/classes/:class_id/students/:student_id/detail", get(student_detail))
-        .route("/classes/:class_id/students/:student_id/assignments", get(student_assignments))
-        .route("/classes/:class_id/students/:student_id/progress-timeline", get(student_progress_timeline))
-        .route("/classes/:class_id/students/:student_id/day-of-week", get(student_day_of_week))
-        .route("/classes/:class_id/students/:student_id/time-of-day", get(student_time_of_day))
+        .route(
+            "/classes/:class_id/students/:student_id/detail",
+            get(student_detail),
+        )
+        .route(
+            "/classes/:class_id/students/:student_id/assignments",
+            get(student_assignments),
+        )
+        .route(
+            "/classes/:class_id/students/:student_id/progress-timeline",
+            get(student_progress_timeline),
+        )
+        .route(
+            "/classes/:class_id/students/:student_id/day-of-week",
+            get(student_day_of_week),
+        )
+        .route(
+            "/classes/:class_id/students/:student_id/time-of-day",
+            get(student_time_of_day),
+        )
         // Mentors
         .route("/mentors", get(list_mentors))
         // Dashboard (serve index.html at root)
@@ -427,9 +473,7 @@ fn create_router(state: Arc<AppState>) -> Router {
 pub async fn start_server(db_path: &str, port: u16) -> Result<()> {
     let db = Database::new(db_path)?;
 
-    let state = Arc::new(AppState {
-        db: Mutex::new(db),
-    });
+    let state = Arc::new(AppState { db: Mutex::new(db) });
 
     let app = create_router(state);
 

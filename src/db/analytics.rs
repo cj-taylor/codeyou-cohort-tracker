@@ -1,5 +1,5 @@
-use anyhow::Result;
 use super::Database;
+use anyhow::Result;
 
 // Import models from parent crate
 use crate::models::*;
@@ -10,7 +10,9 @@ impl Database {
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
         let total_progressions = self.get_progression_count_by_class(class_id)?;
 
-        let stmt = self.conn.prepare("SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL AND class_id = ?")?;
+        let stmt = self.conn.prepare(
+            "SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL AND class_id = ?",
+        )?;
         let mut stmt = stmt.bind(1, class_id)?;
         let avg_grade = match stmt.next()? {
             sqlite::State::Row => stmt.read::<Option<f64>>(0)?,
@@ -44,7 +46,7 @@ impl Database {
              FROM assignments a
              LEFT JOIN progressions p ON a.id = p.assignment_id
              GROUP BY a.id, a.name, a.type
-             ORDER BY completions DESC"
+             ORDER BY completions DESC",
         )?;
 
         let mut assignments = Vec::new();
@@ -101,7 +103,7 @@ impl Database {
              WHERE a.class_id = ?
              GROUP BY a.id, a.name, a.section
              ORDER BY completions ASC, avg_grade ASC
-             LIMIT ?"
+             LIMIT ?",
         )?;
         let mut stmt = stmt.bind(1, class_id)?.bind(2, limit as i64)?;
 
@@ -141,7 +143,7 @@ impl Database {
              LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
              WHERE s.class_id = ?
              GROUP BY s.id, s.first_name, s.last_name, s.email
-             ORDER BY completed ASC, avg_grade ASC"
+             ORDER BY completed ASC, avg_grade ASC",
         )?;
         let mut stmt = stmt.bind(1, class_id)?;
 
@@ -189,7 +191,7 @@ impl Database {
              FROM progressions
              WHERE completed_at IS NOT NULL AND completed_at != '' AND class_id = ?
              GROUP BY week
-             ORDER BY week ASC"
+             ORDER BY week ASC",
         )?;
         let mut stmt = stmt.bind(1, class_id)?;
 
@@ -215,10 +217,14 @@ impl Database {
         self.get_student_activity_filtered(class_id, None)
     }
 
-    pub fn get_student_activity_filtered(&self, class_id: &str, night: Option<&str>) -> Result<Vec<StudentActivity>> {
+    pub fn get_student_activity_filtered(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<StudentActivity>> {
         // First get total assignments for the class
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
-        
+
         let query = match night {
             Some(_) => {
                 "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
@@ -289,7 +295,7 @@ impl Database {
              LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
              WHERE s.night IS NOT NULL AND s.class_id = ?
              GROUP BY s.night
-             ORDER BY s.night"
+             ORDER BY s.night",
         )?;
         let mut stmt = stmt.bind(1, class_id)?;
 
@@ -308,7 +314,9 @@ impl Database {
                 0.0
             };
 
-            let mentor_stmt = self.conn.prepare("SELECT name FROM mentors WHERE LOWER(night) = LOWER(?)")?;
+            let mentor_stmt = self
+                .conn
+                .prepare("SELECT name FROM mentors WHERE LOWER(night) = LOWER(?)")?;
             let mut mentor_stmt = mentor_stmt.bind(1, night.as_str())?;
             let mut mentors = Vec::new();
             while let sqlite::State::Row = mentor_stmt.next()? {
@@ -328,7 +336,11 @@ impl Database {
         Ok(summaries)
     }
 
-    pub fn get_student_detail(&self, class_id: &str, student_id: &str) -> Result<Option<StudentDetail>> {
+    pub fn get_student_detail(
+        &self,
+        class_id: &str,
+        student_id: &str,
+    ) -> Result<Option<StudentDetail>> {
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
         let stmt = self.conn.prepare(
@@ -339,7 +351,7 @@ impl Database {
              FROM students s
              LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
              WHERE s.id = ? AND s.class_id = ?
-             GROUP BY s.id, s.first_name, s.last_name, s.email, s.region, s.night"
+             GROUP BY s.id, s.first_name, s.last_name, s.email, s.region, s.night",
         )?;
         let mut stmt = stmt.bind(1, student_id)?.bind(2, class_id)?;
 
@@ -391,7 +403,11 @@ impl Database {
         }
     }
 
-    pub fn get_student_assignments(&self, class_id: &str, student_id: &str) -> Result<Vec<StudentAssignmentStatus>> {
+    pub fn get_student_assignments(
+        &self,
+        class_id: &str,
+        student_id: &str,
+    ) -> Result<Vec<StudentAssignmentStatus>> {
         let stmt = self.conn.prepare(
             "SELECT a.id, a.name, a.type, a.section,
                     p.grade, p.completed_at,
@@ -421,7 +437,11 @@ impl Database {
         Ok(assignments)
     }
 
-    pub fn get_student_progress_timeline(&self, class_id: &str, student_id: &str) -> Result<Vec<StudentProgressPoint>> {
+    pub fn get_student_progress_timeline(
+        &self,
+        class_id: &str,
+        student_id: &str,
+    ) -> Result<Vec<StudentProgressPoint>> {
         let stmt = self.conn.prepare(
             "SELECT strftime('%Y-%W', completed_at) as week,
                     COUNT(*) as completed,
@@ -495,7 +515,7 @@ impl Database {
              FROM progressions
              WHERE class_id = ? AND completed_at IS NOT NULL AND completed_at != ''
              GROUP BY day_num
-             ORDER BY day_num"
+             ORDER BY day_num",
         )?;
         let mut stmt = stmt.bind(1, class_id)?;
 
@@ -509,7 +529,11 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_student_completions_by_day_of_week(&self, class_id: &str, student_id: &str) -> Result<Vec<DayOfWeekStats>> {
+    pub fn get_student_completions_by_day_of_week(
+        &self,
+        class_id: &str,
+        student_id: &str,
+    ) -> Result<Vec<DayOfWeekStats>> {
         let stmt = self.conn.prepare(
             "SELECT 
                 CASE CAST(strftime('%w', completed_at) AS INTEGER)
@@ -573,7 +597,11 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_student_completions_by_time_of_day(&self, class_id: &str, student_id: &str) -> Result<Vec<DayOfWeekStats>> {
+    pub fn get_student_completions_by_time_of_day(
+        &self,
+        class_id: &str,
+        student_id: &str,
+    ) -> Result<Vec<DayOfWeekStats>> {
         let stmt = self.conn.prepare(
             "SELECT 
                 CASE 

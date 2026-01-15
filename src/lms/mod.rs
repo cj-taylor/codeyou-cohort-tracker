@@ -1,6 +1,6 @@
+use crate::models::{Assignment, Class, Student};
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::models::{Class, Student, Assignment};
 
 pub mod openclass;
 
@@ -8,7 +8,10 @@ pub mod openclass;
 pub trait LmsProvider: Send + Sync {
     async fn authenticate(&mut self) -> Result<()>;
     async fn fetch_classes(&self) -> Result<Vec<Class>>;
-    async fn fetch_class_structure(&self, class_id: &str) -> Result<std::collections::HashMap<String, String>>;
+    async fn fetch_class_structure(
+        &self,
+        class_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>>;
     async fn fetch_progressions(&self, class_id: &str, page: i32) -> Result<ProgressionBatch>;
     fn provider_name(&self) -> &str;
 }

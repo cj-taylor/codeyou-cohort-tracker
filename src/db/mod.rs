@@ -1,8 +1,8 @@
 use anyhow::Result;
 use sqlite::Connection;
 
-mod queries;
 mod analytics;
+mod queries;
 
 pub struct Database {
     pub(crate) conn: Connection,
@@ -71,12 +71,16 @@ impl Database {
         )?;
 
         // Create indexes
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_progressions_class ON progressions(class_id)")?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_progressions_class ON progressions(class_id)",
+        )?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id)")?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id)")?;
 
         // Migration: Add section column to assignments if it doesn't exist
-        let has_section = conn.prepare("SELECT section FROM assignments LIMIT 1").is_err();
+        let has_section = conn
+            .prepare("SELECT section FROM assignments LIMIT 1")
+            .is_err();
         if has_section {
             println!("Migrating database: Adding section column to assignments table...");
             conn.execute("ALTER TABLE assignments ADD COLUMN section TEXT")?;

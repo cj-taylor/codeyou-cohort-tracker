@@ -1,6 +1,6 @@
 use cohort_tracker::config::Config;
-use tempfile::NamedTempFile;
 use std::fs;
+use tempfile::NamedTempFile;
 
 #[test]
 fn test_config_serialization() {
@@ -12,7 +12,7 @@ fn test_config_serialization() {
 
     let toml_str = toml::to_string(&config).unwrap();
     let parsed: Config = toml::from_str(&toml_str).unwrap();
-    
+
     assert_eq!(config.email, parsed.email);
     assert_eq!(config.password, parsed.password);
     assert_eq!(config.api_base, parsed.api_base);
@@ -34,7 +34,7 @@ fn test_config_save_and_load() {
 
     // Load config
     let loaded = Config::from_file(path).unwrap();
-    
+
     assert_eq!(config.email, loaded.email);
     assert_eq!(config.password, loaded.password);
     assert_eq!(config.api_base, loaded.api_base);
@@ -50,9 +50,9 @@ fn test_config_load_nonexistent_file() {
 fn test_config_load_invalid_toml() {
     let temp_file = NamedTempFile::new().unwrap();
     let path = temp_file.path().to_str().unwrap();
-    
+
     fs::write(path, "invalid toml content [[[").unwrap();
-    
+
     let result = Config::from_file(path);
     assert!(result.is_err());
 }
