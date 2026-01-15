@@ -25,7 +25,7 @@ email=mentor@example.com&password=your-password&invite_code=&instructor_invite_c
 - `Content-Type: application/x-www-form-urlencoded`
 - `Accept: */*`
 - `Origin: https://classroom.code-you.org`
-- `X-OpenClass-App-Id: 38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0`
+- `X-OpenClass-App-Id: <app-id>` (hardcoded in source)
 
 **Response:**
 ```json
@@ -51,7 +51,7 @@ Authorization: Bearer {token}
 - `Content-Type: application/json; charset=ISO-8859-1`
 - `Accept: */*`
 - `Origin: https://classroom.code-you.org`
-- `X-OpenClass-App-Id: 38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0`
+- `X-OpenClass-App-Id: <app-id>` (hardcoded in source)
 
 **Response Structure:**
 ```json
@@ -89,7 +89,7 @@ pub async fn fetch_classes(&self) -> Result<Vec<Class>> {
         .header("Content-Type", "application/json; charset=ISO-8859-1")
         .header("Accept", "*/*")
         .header("Origin", "https://classroom.code-you.org")
-        .header("X-OpenClass-App-Id", "38e8433f3fd003aa0f650125e9ff1e9427d476796e37803cea9942ff7cc31cd0")
+        .header("X-OpenClass-App-Id", OPENCLASS_APP_ID)
         .send()
         .await?;
 
