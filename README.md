@@ -2,6 +2,17 @@
 
 Pulls student progress data from OpenClass.ai and stores it locally in SQLite. Built in Rust.
 
+## Why This Exists
+
+As a mentor, it's hard to know where students are in their progression without manually clicking through OpenClass pages and loading paginated results. This tool solves that by:
+
+- Automatically syncing all student progress data via the OpenClass API
+- Storing it locally so you can query and analyze it however you want
+- Providing a dashboard to quickly see who's stuck, who's active, and when they're working
+- Helping you prepare for office hours by knowing what assignments students are on
+
+Built for CodeYou mentors who want better visibility into their cohorts.
+
 ## Quick Start
 
 New to the project? Check out the [Getting Started Guide](./docs/getting-started.md).
