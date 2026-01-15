@@ -322,7 +322,7 @@ async fn sync_class(
         yield Ok(axum::response::sse::Event::default().data(format!("Starting sync with: {:?}", current_exe)));
 
         let mut child = match Command::new(&current_exe)
-            .args(&["sync", "--class", &class_id])
+            .args(["sync", "--class", &class_id])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn() {
@@ -504,7 +504,7 @@ pub async fn start_server(db_path: &str, port: u16) -> Result<()> {
     println!("  GET  /classes/{{class_id}}/students/{{student_id}}/progress-timeline");
     println!();
     println!("Dashboard:");
-    println!("  http://{}:{}/dashboard/", "localhost", port);
+    println!("  http://localhost:{}/dashboard/", port);
     println!();
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;

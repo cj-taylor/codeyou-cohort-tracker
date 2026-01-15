@@ -234,6 +234,7 @@ impl Database {
     }
 
     // Progression operations
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_progression(
         &self,
         id: &str,

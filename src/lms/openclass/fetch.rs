@@ -112,12 +112,12 @@ impl OpenClassProvider {
 
         let class_data: serde_json::Value = if let Some(result) = outer_json.get("result") {
             if let Some(objects_array) = result.get("objects").and_then(|o| o.as_array()) {
-                if let Some(objects_str) = objects_array.get(0).and_then(|s| s.as_str()) {
+                if let Some(objects_str) = objects_array.first().and_then(|s| s.as_str()) {
                     let nested: serde_json::Value = serde_json::from_str(objects_str)
                         .map_err(|e| anyhow!("Failed to parse nested class data: {}", e))?;
 
                     if let Some(data_array) = nested.get("data").and_then(|d| d.as_array()) {
-                        if let Some(class_obj) = data_array.get(0) {
+                        if let Some(class_obj) = data_array.first() {
                             class_obj.clone()
                         } else {
                             return Ok(std::collections::HashMap::new());
@@ -211,7 +211,7 @@ impl OpenClassProvider {
             .get("result")
             .and_then(|r| r.get("objects"))
             .and_then(|o| o.as_array())
-            .and_then(|arr| arr.get(0))
+            .and_then(|arr| arr.first())
             .and_then(|s| s.as_str())
             .ok_or_else(|| anyhow!("Invalid response structure"))?;
 
