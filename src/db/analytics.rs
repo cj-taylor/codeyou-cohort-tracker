@@ -5,18 +5,55 @@ use anyhow::Result;
 use crate::models::*;
 
 impl Database {
-    pub fn get_progress_summary(&self, class_id: &str) -> Result<ProgressSummary> {
-        let total_students = self.get_student_count_by_class(class_id)?;
+    pub fn get_progress_summary(&self, class_id: &str, night: Option<&str>) -> Result<ProgressSummary> {
+        let total_students = if let Some(night_val) = night {
+            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<i64>(0)?,
+                sqlite::State::Done => 0,
+            }
+        } else {
+            self.get_student_count_by_class(class_id)?
+        };
+        
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
-        let total_progressions = self.get_progression_count_by_class(class_id)?;
+        
+        let total_progressions = if let Some(night_val) = night {
+            let stmt = self.conn.prepare(
+                "SELECT COUNT(*) FROM progressions p 
+                 JOIN students s ON p.student_id = s.id 
+                 WHERE p.class_id = ? AND s.night = ? AND p.grade IS NOT NULL AND p.grade >= 0.7"
+            )?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<i64>(0)?,
+                sqlite::State::Done => 0,
+            }
+        } else {
+            self.get_progression_count_by_class(class_id)?
+        };
 
-        let stmt = self.conn.prepare(
-            "SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL AND class_id = ?",
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?;
-        let avg_grade = match stmt.next()? {
-            sqlite::State::Row => stmt.read::<Option<f64>>(0)?,
-            sqlite::State::Done => None,
+        let avg_grade = if let Some(night_val) = night {
+            let stmt = self.conn.prepare(
+                "SELECT AVG(p.grade) FROM progressions p 
+                 JOIN students s ON p.student_id = s.id 
+                 WHERE p.grade IS NOT NULL AND p.class_id = ? AND s.night = ?"
+            )?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<Option<f64>>(0)?,
+                sqlite::State::Done => None,
+            }
+        } else {
+            let stmt = self.conn.prepare(
+                "SELECT AVG(grade) FROM progressions WHERE grade IS NOT NULL AND class_id = ?",
+            )?;
+            let mut stmt = stmt.bind(1, class_id)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<Option<f64>>(0)?,
+                sqlite::State::Done => None,
+            }
         };
 
         let expected_total = total_students * total_assignments;
@@ -91,10 +128,30 @@ impl Database {
         })
     }
 
-    pub fn get_blockers(&self, class_id: &str, limit: usize) -> Result<Vec<BlockerAssignment>> {
-        let total_students = self.get_student_count_by_class(class_id)?;
+    pub fn get_blockers(&self, class_id: &str, limit: usize, night: Option<&str>) -> Result<Vec<BlockerAssignment>> {
+        let total_students = if let Some(night_val) = night {
+            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<i64>(0)?,
+                sqlite::State::Done => 0,
+            }
+        } else {
+            self.get_student_count_by_class(class_id)?
+        };
 
-        let stmt = self.conn.prepare(
+        let query = if night.is_some() {
+            "SELECT a.id, a.name, a.section,
+                    COUNT(p.id) as completions,
+                    AVG(p.grade) as avg_grade
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             LEFT JOIN students s ON p.student_id = s.id
+             WHERE a.class_id = ? AND (s.night = ? OR s.night IS NULL)
+             GROUP BY a.id, a.name, a.section
+             ORDER BY completions ASC, avg_grade ASC
+             LIMIT ?"
+        } else {
             "SELECT a.id, a.name, a.section,
                     COUNT(p.id) as completions,
                     AVG(p.grade) as avg_grade
@@ -103,9 +160,15 @@ impl Database {
              WHERE a.class_id = ?
              GROUP BY a.id, a.name, a.section
              ORDER BY completions ASC, avg_grade ASC
-             LIMIT ?",
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?.bind(2, limit as i64)?;
+             LIMIT ?"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?.bind(3, limit as i64)?
+        } else {
+            stmt.bind(1, class_id)?.bind(2, limit as i64)?
+        };
 
         let mut blockers = Vec::new();
 
@@ -132,10 +195,19 @@ impl Database {
         Ok(blockers)
     }
 
-    pub fn get_student_health(&self, class_id: &str) -> Result<Vec<StudentHealth>> {
+    pub fn get_student_health(&self, class_id: &str, night: Option<&str>) -> Result<Vec<StudentHealth>> {
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
-        let stmt = self.conn.prepare(
+        let query = if night.is_some() {
+            "SELECT s.id, s.first_name, s.last_name, s.email,
+                    COUNT(p.id) as completed,
+                    AVG(p.grade) as avg_grade
+             FROM students s
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.class_id = ? AND s.night = ?
+             GROUP BY s.id, s.first_name, s.last_name, s.email
+             ORDER BY completed ASC, avg_grade ASC"
+        } else {
             "SELECT s.id, s.first_name, s.last_name, s.email,
                     COUNT(p.id) as completed,
                     AVG(p.grade) as avg_grade
@@ -143,9 +215,15 @@ impl Database {
              LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
              WHERE s.class_id = ?
              GROUP BY s.id, s.first_name, s.last_name, s.email
-             ORDER BY completed ASC, avg_grade ASC",
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?;
+             ORDER BY completed ASC, avg_grade ASC"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
 
         let mut students = Vec::new();
 
@@ -184,16 +262,30 @@ impl Database {
         Ok(students)
     }
 
-    pub fn get_progress_over_time(&self, class_id: &str) -> Result<Vec<WeeklyProgress>> {
-        let stmt = self.conn.prepare(
+    pub fn get_progress_over_time(&self, class_id: &str, night: Option<&str>) -> Result<Vec<WeeklyProgress>> {
+        let query = if night.is_some() {
+            "SELECT strftime('%Y-%W', p.completed_at) as week,
+                    COUNT(*) as completed
+             FROM progressions p
+             JOIN students s ON p.student_id = s.id
+             WHERE p.completed_at IS NOT NULL AND p.completed_at != '' AND p.class_id = ? AND s.night = ?
+             GROUP BY week
+             ORDER BY week ASC"
+        } else {
             "SELECT strftime('%Y-%W', completed_at) as week,
                     COUNT(*) as completed
              FROM progressions
              WHERE completed_at IS NOT NULL AND completed_at != '' AND class_id = ?
              GROUP BY week
-             ORDER BY week ASC",
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?;
+             ORDER BY week ASC"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
 
         let mut weekly = Vec::new();
         let mut cumulative = 0i64;
@@ -498,8 +590,26 @@ impl Database {
         }
     }
 
-    pub fn get_completions_by_day_of_week(&self, class_id: &str) -> Result<Vec<DayOfWeekStats>> {
-        let stmt = self.conn.prepare(
+    pub fn get_completions_by_day_of_week(&self, class_id: &str, night: Option<&str>) -> Result<Vec<DayOfWeekStats>> {
+        let query = if night.is_some() {
+            "SELECT 
+                CASE CAST(strftime('%w', p.completed_at) AS INTEGER)
+                    WHEN 0 THEN 'Sunday'
+                    WHEN 1 THEN 'Monday'
+                    WHEN 2 THEN 'Tuesday'
+                    WHEN 3 THEN 'Wednesday'
+                    WHEN 4 THEN 'Thursday'
+                    WHEN 5 THEN 'Friday'
+                    WHEN 6 THEN 'Saturday'
+                END as day_name,
+                CAST(strftime('%w', p.completed_at) AS INTEGER) as day_num,
+                COUNT(*) as count
+             FROM progressions p
+             JOIN students s ON p.student_id = s.id
+             WHERE p.class_id = ? AND s.night = ? AND p.completed_at IS NOT NULL AND p.completed_at != ''
+             GROUP BY day_num
+             ORDER BY day_num"
+        } else {
             "SELECT 
                 CASE CAST(strftime('%w', completed_at) AS INTEGER)
                     WHEN 0 THEN 'Sunday'
@@ -515,9 +625,15 @@ impl Database {
              FROM progressions
              WHERE class_id = ? AND completed_at IS NOT NULL AND completed_at != ''
              GROUP BY day_num
-             ORDER BY day_num",
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?;
+             ORDER BY day_num"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
 
         let mut results = Vec::new();
         while let sqlite::State::Row = stmt.next()? {
@@ -564,8 +680,28 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_completions_by_time_of_day(&self, class_id: &str) -> Result<Vec<DayOfWeekStats>> {
-        let stmt = self.conn.prepare(
+    pub fn get_completions_by_time_of_day(&self, class_id: &str, night: Option<&str>) -> Result<Vec<DayOfWeekStats>> {
+        let query = if night.is_some() {
+            "SELECT 
+                CASE 
+                    WHEN CAST(strftime('%H', p.completed_at) AS INTEGER) BETWEEN 6 AND 11 THEN 'Morning (6am-12pm)'
+                    WHEN CAST(strftime('%H', p.completed_at) AS INTEGER) BETWEEN 12 AND 17 THEN 'Afternoon (12pm-6pm)'
+                    WHEN CAST(strftime('%H', p.completed_at) AS INTEGER) BETWEEN 18 AND 23 THEN 'Evening (6pm-12am)'
+                    ELSE 'Night (12am-6am)'
+                END as time_period,
+                COUNT(*) as count
+             FROM progressions p
+             JOIN students s ON p.student_id = s.id
+             WHERE p.class_id = ? AND s.night = ? AND p.completed_at IS NOT NULL AND p.completed_at != ''
+             GROUP BY time_period
+             ORDER BY 
+                CASE time_period
+                    WHEN 'Morning (6am-12pm)' THEN 1
+                    WHEN 'Afternoon (12pm-6pm)' THEN 2
+                    WHEN 'Evening (6pm-12am)' THEN 3
+                    ELSE 4
+                END"
+        } else {
             "SELECT 
                 CASE 
                     WHEN CAST(strftime('%H', completed_at) AS INTEGER) BETWEEN 6 AND 11 THEN 'Morning (6am-12pm)'
@@ -584,8 +720,14 @@ impl Database {
                     WHEN 'Evening (6pm-12am)' THEN 3
                     ELSE 4
                 END"
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?;
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
 
         let mut results = Vec::new();
         while let sqlite::State::Row = stmt.next()? {
@@ -634,8 +776,20 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_section_progress(&self, class_id: &str) -> Result<Vec<SectionProgress>> {
-        let stmt = self.conn.prepare(
+    pub fn get_section_progress(&self, class_id: &str, night: Option<&str>) -> Result<Vec<SectionProgress>> {
+        let query = if night.is_some() {
+            "SELECT 
+                a.section,
+                COUNT(DISTINCT s.id) as total_students,
+                COUNT(DISTINCT CASE WHEN p.id IS NOT NULL THEN s.id END) as students_started,
+                COUNT(DISTINCT CASE WHEN p.id IS NOT NULL AND p.grade >= 0.7 THEN s.id END) as students_completed
+             FROM assignments a
+             CROSS JOIN students s ON s.class_id = ? AND s.night = ?
+             LEFT JOIN progressions p ON p.assignment_id = a.id AND p.student_id = s.id AND p.class_id = a.class_id
+             WHERE a.class_id = ? AND a.section IS NOT NULL AND a.section != ''
+             GROUP BY a.section
+             ORDER BY a.section"
+        } else {
             "SELECT 
                 a.section,
                 COUNT(DISTINCT s.id) as total_students,
@@ -647,8 +801,14 @@ impl Database {
              WHERE a.class_id = ? AND a.section IS NOT NULL AND a.section != ''
              GROUP BY a.section
              ORDER BY a.section"
-        )?;
-        let mut stmt = stmt.bind(1, class_id)?.bind(2, class_id)?;
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?.bind(3, class_id)?
+        } else {
+            stmt.bind(1, class_id)?.bind(2, class_id)?
+        };
 
         let mut results = Vec::new();
         while let sqlite::State::Row = stmt.next()? {
