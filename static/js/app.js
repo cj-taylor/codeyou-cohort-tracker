@@ -214,7 +214,11 @@ async function loadHealth() {
 }
 
 async function loadSummary() {
-  const data = await fetchData(`/classes/${currentClassId}/progress-summary`);
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/progress-summary?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/progress-summary`;
+  const data = await fetchData(endpoint);
   if (!data) return;
 
   // Update class-specific counts
@@ -233,7 +237,11 @@ async function loadSummary() {
 }
 
 async function loadBlockers() {
-  const data = await fetchData(`/classes/${currentClassId}/metrics/blockers`);
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/blockers?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/blockers`;
+  const data = await fetchData(endpoint);
   const tbody = document.getElementById("blockers-body");
 
   if (!data || data.length === 0) {
@@ -896,9 +904,11 @@ document
   });
 
 async function loadProgressChart() {
-  const data = await fetchData(
-    `/classes/${currentClassId}/metrics/progress-over-time`
-  );
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/progress-over-time?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/progress-over-time`;
+  const data = await fetchData(endpoint);
   if (!data || data.length === 0) return;
 
   const ctx = document.getElementById("progress-chart").getContext("2d");
@@ -1019,15 +1029,25 @@ async function openWeekModal(isoWeek) {
   // Fetch progressions for this week
   const progressions = await fetchData(`/classes/${currentClassId}/progressions`);
   const assignments = await fetchData(`/classes/${currentClassId}/assignments`);
+  let students = await fetchData(`/classes/${currentClassId}/students`);
 
-  if (!progressions || !assignments) {
+  if (!progressions || !assignments || !students) {
     document.getElementById("modal-week-info").textContent = "Failed to load data";
     return;
   }
 
-  // Filter progressions for this week
+  // Apply night filter if active
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  let filteredStudentIds = null;
+  if (globalNightFilter) {
+    students = students.filter(s => s.night && s.night.toLowerCase() === globalNightFilter.toLowerCase());
+    filteredStudentIds = new Set(students.map(s => s.id));
+  }
+
+  // Filter progressions for this week and by night if applicable
   const weekProgressions = progressions.filter(p => {
     if (!p.completed_at) return false;
+    if (filteredStudentIds && !filteredStudentIds.has(p.student_id)) return false;
     const completedWeek = new Date(p.completed_at).toISOString().split('T')[0];
     const completedDate = new Date(completedWeek);
     return completedDate >= weekStart && completedDate <= weekEnd;
@@ -1122,9 +1142,11 @@ document.getElementById("week-modal").addEventListener("click", function(e) {
 });
 
 async function loadDayOfWeekChart() {
-  const data = await fetchData(
-    `/classes/${currentClassId}/metrics/day-of-week`
-  );
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/day-of-week?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/day-of-week`;
+  const data = await fetchData(endpoint);
   if (!data || data.length === 0) return;
 
   const ctx = document.getElementById("day-of-week-chart").getContext("2d");
@@ -1174,9 +1196,11 @@ async function loadDayOfWeekChart() {
 }
 
 async function loadTimeOfDayChart() {
-  const data = await fetchData(
-    `/classes/${currentClassId}/metrics/time-of-day`
-  );
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/time-of-day?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/time-of-day`;
+  const data = await fetchData(endpoint);
   if (!data || data.length === 0) return;
 
   const ctx = document.getElementById("time-of-day-chart").getContext("2d");
@@ -1222,9 +1246,11 @@ async function loadTimeOfDayChart() {
 }
 
 async function loadSectionProgress() {
-  const data = await fetchData(
-    `/classes/${currentClassId}/metrics/section-progress`
-  );
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/section-progress?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/section-progress`;
+  const data = await fetchData(endpoint);
   const tbody = document.getElementById("section-progress-body");
 
   if (!data || data.length === 0) {
@@ -1415,8 +1441,12 @@ async function setupNightFilter() {
   // Get unique nights
   const nights = [...new Set(students.map(s => s.night).filter(n => n && n.trim() !== ''))].sort();
   
-  // Populate filter
+  // Populate filter - clear existing options first except "All Nights"
   const select = document.getElementById('global-night-filter');
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
+  
   nights.forEach(night => {
     const option = document.createElement('option');
     option.value = night;
@@ -1424,16 +1454,44 @@ async function setupNightFilter() {
     select.appendChild(option);
   });
   
+  // Restore saved night filter
+  const savedNight = localStorage.getItem(`nightFilter_${currentClassId}`);
+  if (savedNight && nights.includes(savedNight)) {
+    select.value = savedNight;
+  }
+  
   document.getElementById('night-filter-container').style.display = 'block';
 }
 
 function applyNightFilter() {
   const selectedNight = document.getElementById('global-night-filter').value;
   
+  // Save selection to localStorage
+  if (selectedNight) {
+    localStorage.setItem(`nightFilter_${currentClassId}`, selectedNight);
+  } else {
+    localStorage.removeItem(`nightFilter_${currentClassId}`);
+  }
+  
+  // Clear existing charts before reloading
+  const chartIds = ['progress-chart', 'day-of-week-chart', 'time-of-day-chart'];
+  chartIds.forEach(id => {
+    const canvas = document.getElementById(id);
+    if (canvas) {
+      const chart = Chart.getChart(canvas);
+      if (chart) chart.destroy();
+    }
+  });
+  
   // Reload all data with the filter
+  loadSummary();
+  loadBlockers();
   loadStudentHealth();
   loadStudentActivity();
-  loadBlockers();
+  loadProgressChart();
+  loadDayOfWeekChart();
+  loadTimeOfDayChart();
+  loadSectionProgress();
 }
 
 // Table sorting functionality
@@ -1603,13 +1661,19 @@ async function openSectionModal(sectionName) {
   document.getElementById("modal-section-info").textContent = "Loading...";
 
   // Fetch all data
-  const students = await fetchData(`/classes/${currentClassId}/students`);
+  let students = await fetchData(`/classes/${currentClassId}/students`);
   const assignments = await fetchData(`/classes/${currentClassId}/assignments`);
   const progressions = await fetchData(`/classes/${currentClassId}/progressions`);
 
   if (!students || !assignments || !progressions) {
     document.getElementById("modal-section-info").textContent = "Failed to load data";
     return;
+  }
+
+  // Apply night filter if active
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  if (globalNightFilter) {
+    students = students.filter(s => s.night && s.night.toLowerCase() === globalNightFilter.toLowerCase());
   }
 
   // Get assignments for this section
