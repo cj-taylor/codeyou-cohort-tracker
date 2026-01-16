@@ -133,10 +133,12 @@ async fn list_progressions(
 
 async fn progress_summary(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProgressSummary>, ApiError> {
     let db = state.db.lock().await;
-    let summary = db.get_progress_summary(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let summary = db.get_progress_summary(&class_id, night)?;
     Ok(Json(summary))
 }
 
@@ -152,28 +154,34 @@ async fn metrics_completion(
 
 async fn metrics_blockers(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<BlockerAssignment>>, ApiError> {
     let db = state.db.lock().await;
-    let blockers = db.get_blockers(&class_id, 10)?; // Top 10 blockers
+    let night = params.get("night").map(|s| s.as_str());
+    let blockers = db.get_blockers(&class_id, 10, night)?; // Top 10 blockers
     Ok(Json(blockers))
 }
 
 async fn metrics_student_health(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<StudentHealth>>, ApiError> {
     let db = state.db.lock().await;
-    let health = db.get_student_health(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let health = db.get_student_health(&class_id, night)?;
     Ok(Json(health))
 }
 
 async fn metrics_progress_over_time(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<WeeklyProgress>>, ApiError> {
     let db = state.db.lock().await;
-    let progress = db.get_progress_over_time(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let progress = db.get_progress_over_time(&class_id, night)?;
     Ok(Json(progress))
 }
 
@@ -204,10 +212,12 @@ async fn metrics_night_summary(
 
 async fn metrics_day_of_week(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
     let db = state.db.lock().await;
-    let stats = db.get_completions_by_day_of_week(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let stats = db.get_completions_by_day_of_week(&class_id, night)?;
     Ok(Json(stats))
 }
 
@@ -222,10 +232,12 @@ async fn student_day_of_week(
 
 async fn metrics_time_of_day(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<DayOfWeekStats>>, ApiError> {
     let db = state.db.lock().await;
-    let stats = db.get_completions_by_time_of_day(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let stats = db.get_completions_by_time_of_day(&class_id, night)?;
     Ok(Json(stats))
 }
 
@@ -240,10 +252,12 @@ async fn student_time_of_day(
 
 async fn metrics_section_progress(
     Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<SectionProgress>>, ApiError> {
     let db = state.db.lock().await;
-    let progress = db.get_section_progress(&class_id)?;
+    let night = params.get("night").map(|s| s.as_str());
+    let progress = db.get_section_progress(&class_id, night)?;
     Ok(Json(progress))
 }
 
