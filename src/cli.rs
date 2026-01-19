@@ -75,6 +75,7 @@ pub async fn handle_init(email: String, password: String, api_base: String) -> R
         email: email.clone(),
         password: password.clone(),
         api_base: api_base.clone(),
+        check_for_updates: true,
     };
 
     let config_path = Config::default_path();

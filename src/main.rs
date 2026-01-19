@@ -1,12 +1,29 @@
 use anyhow::Result;
 use clap::Parser;
 use cohort_tracker::cli;
+use cohort_tracker::config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
 
     let cli = cli::Cli::parse();
+
+    // Check for updates in background (non-blocking)
+    let config_path = cli.config.clone().unwrap_or_else(|| {
+        Config::default_path()
+            .to_str()
+            .unwrap_or(".cohort-tracker.toml")
+            .to_string()
+    });
+
+    if let Ok(config) = Config::from_file(&config_path) {
+        if config.check_for_updates {
+            tokio::spawn(async {
+                cohort_tracker::update::check_and_notify().await;
+            });
+        }
+    }
 
     match cli.command {
         cli::Commands::Init {

@@ -8,6 +8,7 @@ fn test_config_serialization() {
         email: "test@example.com".to_string(),
         password: "password123".to_string(),
         api_base: "https://api.openclass.ai".to_string(),
+        check_for_updates: true,
     };
 
     let toml_str = toml::to_string(&config).unwrap();
@@ -24,6 +25,7 @@ fn test_config_save_and_load() {
         email: "test@example.com".to_string(),
         password: "password123".to_string(),
         api_base: "https://api.openclass.ai".to_string(),
+        check_for_updates: true,
     };
 
     let temp_file = NamedTempFile::new().unwrap();

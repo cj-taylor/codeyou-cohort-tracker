@@ -23,6 +23,7 @@ async fn test_authentication_success() {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
         api_base: mock_server.uri(),
+        check_for_updates: false,
     };
 
     let mut client = OpenClassClient::new(config);
@@ -45,6 +46,7 @@ async fn test_authentication_failure() {
         email: "wrong@example.com".to_string(),
         password: "wrongpass".to_string(),
         api_base: mock_server.uri(),
+        check_for_updates: false,
     };
 
     let mut client = OpenClassClient::new(config);
@@ -111,6 +113,7 @@ async fn test_fetch_progressions() {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
         api_base: mock_server.uri(),
+        check_for_updates: false,
     };
 
     let mut client = OpenClassClient::new(config);

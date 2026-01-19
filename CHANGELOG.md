@@ -8,7 +8,8 @@ Releases are tagged with the date in YYYY.MM.DD format (e.g., v2026.01.19).
 
 ### Added
 - Self-update functionality with `update` command
-- Automatic version checking (checks GitHub for latest release)
+- Automatic version checking on startup (checks once per 24 hours)
+- Configuration option to disable update checks (`check_for_updates` in config file)
 
 ### Changed
 

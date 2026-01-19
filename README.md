@@ -118,6 +118,17 @@ cargo run -- update
 1. Sync - Fetches student progress from OpenClass API
 2. Store - Saves to local SQLite database (`~/.cohort-tracker.db`)
 3. Serve - REST API provides data to the dashboard
+4. Update - Automatically checks for new versions (once per day)
+
+The sync is incremental by default - it only fetches new data. First sync takes a couple minutes, subsequent syncs are faster.
+
+## Configuration
+
+The configuration file is stored at `~/.cohort-tracker.toml`. You can disable automatic update checks by setting:
+
+```toml
+check_for_updates = false
+```
 4. Visualize - Dashboard shows progress, blockers, and risk levels
 
 The sync is incremental by default - it only fetches new data. First sync takes a couple minutes, subsequent syncs are faster.

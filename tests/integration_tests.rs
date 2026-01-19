@@ -46,6 +46,7 @@ async fn test_config_with_mock_server() {
         email: "test@example.com".to_string(),
         password: "password".to_string(),
         api_base: mock_server.uri(),
+        check_for_updates: false,
     };
 
     // Test config serialization

@@ -8,6 +8,12 @@ pub struct Config {
     pub email: String,
     pub password: String,
     pub api_base: String,
+    #[serde(default = "default_check_for_updates")]
+    pub check_for_updates: bool,
+}
+
+fn default_check_for_updates() -> bool {
+    true
 }
 
 impl Config {
