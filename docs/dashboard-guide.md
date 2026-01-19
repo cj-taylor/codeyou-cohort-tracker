@@ -2,6 +2,38 @@
 
 A step-by-step walkthrough of the Cohort Tracker dashboard, showing how to select classes, filter by night, explore analytics, and interpret the results.
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Step 1: Select a Class](#step-1-select-a-class)
+- [Step 2: View the Dashboard Overview](#step-2-view-the-dashboard-overview)
+- [Step 3: Filter by Night (Optional)](#step-3-filter-by-night-optional)
+- [Step 4: Explore Analytics](#step-4-explore-analytics)
+  - [Assignment Type Breakdown](#assignment-type-breakdown)
+  - [Grade Distribution](#grade-distribution)
+  - [Velocity Tracking](#velocity-tracking)
+  - [Students at Risk](#students-at-risk)
+  - [Engagement Gaps](#engagement-gaps)
+  - [Assignment Difficulty Ranking](#assignment-difficulty-ranking)
+  - [Student Activity](#student-activity)
+  - [Performance by Night](#performance-by-night)
+  - [Progress Over Time](#progress-over-time)
+  - [Activity Patterns](#activity-patterns)
+  - [Progress by Section/Week](#progress-by-sectionweek)
+- [Step 5: Interact with Tables](#step-5-interact-with-tables)
+  - [View Detailed Information](#view-detailed-information)
+- [Step 6: Interpret the Results](#step-6-interpret-the-results)
+  - [Healthy Cohort Indicators](#healthy-cohort-indicators)
+  - [Warning Signs](#warning-signs)
+  - [Action Plan Based on Data](#action-plan-based-on-data)
+- [Tips and Best Practices](#tips-and-best-practices)
+  - [Daily Workflow](#daily-workflow)
+  - [Weekly Review](#weekly-review)
+  - [Before Office Hours](#before-office-hours)
+  - [Demo Mode](#demo-mode)
+- [Troubleshooting](#troubleshooting)
+- [Next Steps](#next-steps)
+
 ## Prerequisites
 
 - Dashboard server running (`make serve` or `cargo run -- serve`)
