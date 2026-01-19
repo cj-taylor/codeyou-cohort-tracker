@@ -22,8 +22,8 @@ impl Database {
         let total_progressions = if let Some(night_val) = night {
             let stmt = self.conn.prepare(
                 "SELECT COUNT(*) FROM progressions p 
-                 JOIN students s ON p.student_id = s.id 
-                 WHERE p.class_id = ? AND s.night = ? AND p.grade IS NOT NULL AND p.grade >= 0.7"
+                 JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
+                 WHERE p.class_id = ? AND s.night = ?"
             )?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
@@ -37,7 +37,7 @@ impl Database {
         let avg_grade = if let Some(night_val) = night {
             let stmt = self.conn.prepare(
                 "SELECT AVG(p.grade) FROM progressions p 
-                 JOIN students s ON p.student_id = s.id 
+                 JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
                  WHERE p.grade IS NOT NULL AND p.class_id = ? AND s.night = ?"
             )?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
@@ -142,12 +142,12 @@ impl Database {
 
         let query = if night.is_some() {
             "SELECT a.id, a.name, a.section,
-                    COUNT(p.id) as completions,
-                    AVG(p.grade) as avg_grade
+                    COUNT(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.id END) as completions,
+                    AVG(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.grade END) as avg_grade
              FROM assignments a
              LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
              LEFT JOIN students s ON p.student_id = s.id
-             WHERE a.class_id = ? AND (s.night = ? OR s.night IS NULL)
+             WHERE a.class_id = ?
              GROUP BY a.id, a.name, a.section
              ORDER BY completions ASC, avg_grade ASC
              LIMIT ?"
@@ -165,7 +165,7 @@ impl Database {
 
         let stmt = self.conn.prepare(query)?;
         let mut stmt = if let Some(night_val) = night {
-            stmt.bind(1, class_id)?.bind(2, night_val)?.bind(3, limit as i64)?
+            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?.bind(4, limit as i64)?
         } else {
             stmt.bind(1, class_id)?.bind(2, limit as i64)?
         };
@@ -387,7 +387,16 @@ impl Database {
              LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
              WHERE s.night IS NOT NULL AND s.class_id = ?
              GROUP BY s.night
-             ORDER BY s.night",
+             ORDER BY CASE s.night
+                 WHEN 'Mon' THEN 1
+                 WHEN 'Tues' THEN 2
+                 WHEN 'Wed' THEN 3
+                 WHEN 'Thurs' THEN 4
+                 WHEN 'Fri' THEN 5
+                 WHEN 'Sat' THEN 6
+                 WHEN 'Sun' THEN 7
+                 ELSE 8
+             END",
         )?;
         let mut stmt = stmt.bind(1, class_id)?;
 
@@ -566,28 +575,21 @@ impl Database {
     }
 
     fn calculate_days_since(&self, date_str: &str) -> Result<i64> {
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use chrono::{NaiveDateTime, Utc};
 
-        let date_part = date_str.split('T').next().unwrap_or(date_str);
-        let parts: Vec<&str> = date_part.split('-').collect();
+        // Parse ISO 8601 datetime string
+        let parsed = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S"))
+            .or_else(|_| {
+                // Try parsing just the date part
+                let date_part = date_str.split('T').next().unwrap_or(date_str);
+                chrono::NaiveDate::parse_from_str(date_part, "%Y-%m-%d")
+                    .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+            })?;
 
-        if parts.len() >= 3 {
-            let year: i64 = parts[0].parse().unwrap_or(2025);
-            let month: i64 = parts[1].parse().unwrap_or(1);
-            let day: i64 = parts[2].parse().unwrap_or(1);
-
-            let date_days = (year - 1970) * 365 + (month - 1) * 30 + day;
-
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-            let now_days = now / 86400;
-
-            Ok(now_days - date_days)
-        } else {
-            Ok(0)
-        }
+        let now = Utc::now().naive_utc();
+        let duration = now.signed_duration_since(parsed);
+        Ok(duration.num_days())
     }
 
     pub fn get_completions_by_day_of_week(&self, class_id: &str, night: Option<&str>) -> Result<Vec<DayOfWeekStats>> {
@@ -774,6 +776,330 @@ impl Database {
             });
         }
         Ok(results)
+    }
+
+    pub fn get_assignment_type_stats(&self, class_id: &str, night: Option<&str>) -> Result<Vec<AssignmentTypeStats>> {
+        let total_students = if let Some(night_val) = night {
+            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<i64>(0)?,
+                sqlite::State::Done => 0,
+            }
+        } else {
+            self.get_student_count_by_class(class_id)?
+        };
+
+        let query = if night.is_some() {
+            "SELECT 
+                a.type,
+                COUNT(DISTINCT a.id) as total_assignments,
+                COUNT(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.id END) as total_completions,
+                AVG(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.grade END) as avg_grade
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             LEFT JOIN students s ON p.student_id = s.id
+             WHERE a.class_id = ?
+             GROUP BY a.type
+             ORDER BY a.type"
+        } else {
+            "SELECT 
+                a.type,
+                COUNT(DISTINCT a.id) as total_assignments,
+                COUNT(p.id) as total_completions,
+                AVG(p.grade) as avg_grade
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             WHERE a.class_id = ?
+             GROUP BY a.type
+             ORDER BY a.type"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
+
+        let mut results = Vec::new();
+        while let sqlite::State::Row = stmt.next()? {
+            let assignment_type = stmt.read::<String>(0)?;
+            let total_assignments = stmt.read::<i64>(1)?;
+            let total_completions = stmt.read::<i64>(2)?;
+            let avg_grade = stmt.read::<Option<f64>>(3)?;
+            
+            let expected_completions = total_students * total_assignments;
+            let avg_completion_rate = if expected_completions > 0 {
+                total_completions as f64 / expected_completions as f64
+            } else {
+                0.0
+            };
+
+            results.push(AssignmentTypeStats {
+                assignment_type,
+                total_assignments,
+                avg_completion_rate,
+                avg_grade,
+                total_completions,
+            });
+        }
+        Ok(results)
+    }
+
+    pub fn get_grade_distribution(&self, class_id: &str, night: Option<&str>) -> Result<Vec<GradeDistribution>> {
+        let query = if night.is_some() {
+            "SELECT p.grade
+             FROM progressions p
+             JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
+             WHERE p.class_id = ? AND s.night = ? AND p.grade IS NOT NULL"
+        } else {
+            "SELECT grade
+             FROM progressions
+             WHERE class_id = ? AND grade IS NOT NULL"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
+
+        // Collect all grades
+        let mut grades = Vec::new();
+        while let sqlite::State::Row = stmt.next()? {
+            grades.push(stmt.read::<f64>(0)?);
+        }
+
+        let total = grades.len() as f64;
+        if total == 0.0 {
+            return Ok(Vec::new());
+        }
+
+        // Create grade buckets
+        let ranges = vec![
+            ("0-50%", 0.0, 0.5),
+            ("50-60%", 0.5, 0.6),
+            ("60-70%", 0.6, 0.7),
+            ("70-80%", 0.7, 0.8),
+            ("80-90%", 0.8, 0.9),
+            ("90-100%", 0.9, 1.01), // 1.01 to include 1.0
+        ];
+
+        let mut distribution = Vec::new();
+        for (label, min, max) in ranges {
+            let count = grades.iter().filter(|&&g| g >= min && g < max).count() as i64;
+            let percentage = (count as f64 / total) * 100.0;
+            distribution.push(GradeDistribution {
+                range: label.to_string(),
+                count,
+                percentage,
+            });
+        }
+
+        Ok(distribution)
+    }
+
+    pub fn get_velocity_stats(&self, class_id: &str, night: Option<&str>) -> Result<Vec<VelocityStats>> {
+        let query = if night.is_some() {
+            "SELECT 
+                strftime('%Y-%W', p.completed_at) as week,
+                COUNT(*) as total_completions,
+                COUNT(DISTINCT p.student_id) as active_students
+             FROM progressions p
+             JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
+             WHERE p.completed_at IS NOT NULL AND p.completed_at != '' 
+                   AND p.class_id = ? AND s.night = ?
+             GROUP BY week
+             ORDER BY week ASC"
+        } else {
+            "SELECT 
+                strftime('%Y-%W', completed_at) as week,
+                COUNT(*) as total_completions,
+                COUNT(DISTINCT student_id) as active_students
+             FROM progressions
+             WHERE completed_at IS NOT NULL AND completed_at != '' AND class_id = ?
+             GROUP BY week
+             ORDER BY week ASC"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
+
+        let mut results = Vec::new();
+        while let sqlite::State::Row = stmt.next()? {
+            let week = stmt.read::<String>(0)?;
+            let total_completions = stmt.read::<i64>(1)?;
+            let active_students = stmt.read::<i64>(2)?;
+            
+            let avg_completions_per_student = if active_students > 0 {
+                total_completions as f64 / active_students as f64
+            } else {
+                0.0
+            };
+
+            results.push(VelocityStats {
+                week,
+                avg_completions_per_student,
+                total_completions,
+                active_students,
+            });
+        }
+
+        Ok(results)
+    }
+
+    pub fn get_engagement_gaps(&self, class_id: &str, night: Option<&str>) -> Result<Vec<EngagementGap>> {
+        let total_assignments = self.get_assignment_count_by_class(class_id)?;
+        
+        let query = if night.is_some() {
+            "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
+                    MAX(p.completed_at) as last_activity,
+                    COUNT(p.id) as completed
+             FROM students s
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.class_id = ? AND s.night = ?
+             GROUP BY s.id, s.first_name, s.last_name, s.email, s.night"
+        } else {
+            "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
+                    MAX(p.completed_at) as last_activity,
+                    COUNT(p.id) as completed
+             FROM students s
+             LEFT JOIN progressions p ON s.id = p.student_id AND s.class_id = p.class_id
+             WHERE s.class_id = ?
+             GROUP BY s.id, s.first_name, s.last_name, s.email, s.night"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, class_id)?.bind(2, night_val)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
+
+        let mut gaps = Vec::new();
+
+        while let sqlite::State::Row = stmt.next()? {
+            let last_activity: Option<String> = stmt.read::<Option<String>>(5)?;
+            let completed = stmt.read::<i64>(6)?;
+            let completion_pct = if total_assignments > 0 {
+                completed as f64 / total_assignments as f64
+            } else {
+                0.0
+            };
+
+            // Only include students who are:
+            // 1. Have >50% completion (not at-risk)
+            // 2. Have been inactive for 7-14 days (engagement gap)
+            if completion_pct > 0.5 {
+                if let Some(ref date_str) = last_activity {
+                    if let Ok(days_inactive) = self.calculate_days_since(date_str) {
+                        if days_inactive >= 7 && days_inactive <= 14 {
+                            gaps.push(EngagementGap {
+                                student_id: stmt.read::<String>(0)?,
+                                first_name: stmt.read::<String>(1)?,
+                                last_name: stmt.read::<String>(2)?,
+                                email: stmt.read::<String>(3)?,
+                                night: stmt.read::<Option<String>>(4)?,
+                                days_inactive,
+                                completion_pct,
+                                last_activity: last_activity.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by days inactive (most concerning first)
+        gaps.sort_by(|a, b| b.days_inactive.cmp(&a.days_inactive));
+
+        Ok(gaps)
+    }
+
+    pub fn get_assignment_difficulty(&self, class_id: &str, night: Option<&str>) -> Result<Vec<AssignmentDifficulty>> {
+        let total_students = if let Some(night_val) = night {
+            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
+            match stmt.next()? {
+                sqlite::State::Row => stmt.read::<i64>(0)?,
+                sqlite::State::Done => 0,
+            }
+        } else {
+            self.get_student_count_by_class(class_id)?
+        };
+
+        let query = if night.is_some() {
+            "SELECT a.id, a.name, a.section, a.type,
+                    COUNT(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.id END) as completions,
+                    AVG(CASE WHEN s.night = ? AND s.class_id = a.class_id THEN p.grade END) as avg_grade
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             LEFT JOIN students s ON p.student_id = s.id
+             WHERE a.class_id = ?
+             GROUP BY a.id, a.name, a.section, a.type"
+        } else {
+            "SELECT a.id, a.name, a.section, a.type,
+                    COUNT(p.id) as completions,
+                    AVG(p.grade) as avg_grade
+             FROM assignments a
+             LEFT JOIN progressions p ON a.id = p.assignment_id AND a.class_id = p.class_id
+             WHERE a.class_id = ?
+             GROUP BY a.id, a.name, a.section, a.type"
+        };
+
+        let stmt = self.conn.prepare(query)?;
+        let mut stmt = if let Some(night_val) = night {
+            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?
+        } else {
+            stmt.bind(1, class_id)?
+        };
+
+        let mut difficulties = Vec::new();
+
+        while let sqlite::State::Row = stmt.next()? {
+            let completions = stmt.read::<i64>(4)?;
+            let avg_grade = stmt.read::<Option<f64>>(5)?;
+            
+            let completion_rate = if total_students > 0 {
+                completions as f64 / total_students as f64
+            } else {
+                0.0
+            };
+
+            // Difficulty score: higher = more difficult
+            // Formula: (1 - completion_rate) * 0.6 + (1 - avg_grade) * 0.4
+            // Weights completion more heavily than grade
+            let grade_component = if let Some(grade) = avg_grade {
+                (1.0 - grade) * 0.4
+            } else {
+                0.4 // Assume difficult if no grades
+            };
+            let completion_component = (1.0 - completion_rate) * 0.6;
+            let difficulty_score = completion_component + grade_component;
+
+            difficulties.push(AssignmentDifficulty {
+                assignment_id: stmt.read::<String>(0)?,
+                name: stmt.read::<String>(1)?,
+                section: stmt.read::<Option<String>>(2)?,
+                assignment_type: stmt.read::<String>(3)?,
+                difficulty_score,
+                completion_rate,
+                avg_grade,
+                total_students,
+                completions,
+            });
+        }
+
+        // Sort by difficulty score (highest first)
+        difficulties.sort_by(|a, b| b.difficulty_score.partial_cmp(&a.difficulty_score).unwrap());
+
+        Ok(difficulties)
     }
 
     pub fn get_section_progress(&self, class_id: &str, night: Option<&str>) -> Result<Vec<SectionProgress>> {

@@ -17,9 +17,10 @@ use tower_http::services::ServeDir;
 use crate::db::Database;
 #[allow(unused_imports)]
 use crate::models::{
-    Assignment, BlockerAssignment, Class, CompletionMetrics, DayOfWeekStats, Mentor, NightSummary,
-    ProgressSummary, ProgressionRecord, SectionProgress, Student, StudentActivity,
-    StudentAssignmentStatus, StudentDetail, StudentHealth, StudentProgressPoint, WeeklyProgress,
+    Assignment, AssignmentDifficulty, AssignmentTypeStats, BlockerAssignment, Class, CompletionMetrics, 
+    DayOfWeekStats, EngagementGap, GradeDistribution, Mentor, NightSummary, ProgressSummary, 
+    ProgressionRecord, SectionProgress, Student, StudentActivity, StudentAssignmentStatus, StudentDetail, 
+    StudentHealth, StudentProgressPoint, VelocityStats, WeeklyProgress,
 };
 
 pub struct AppState {
@@ -208,6 +209,61 @@ async fn metrics_night_summary(
     let db = state.db.lock().await;
     let summary = db.get_night_summary(&class_id)?;
     Ok(Json(summary))
+}
+
+async fn metrics_assignment_types(
+    Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<AssignmentTypeStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let night = params.get("night").map(|s| s.as_str());
+    let stats = db.get_assignment_type_stats(&class_id, night)?;
+    Ok(Json(stats))
+}
+
+async fn metrics_grade_distribution(
+    Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<GradeDistribution>>, ApiError> {
+    let db = state.db.lock().await;
+    let night = params.get("night").map(|s| s.as_str());
+    let distribution = db.get_grade_distribution(&class_id, night)?;
+    Ok(Json(distribution))
+}
+
+async fn metrics_velocity(
+    Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<VelocityStats>>, ApiError> {
+    let db = state.db.lock().await;
+    let night = params.get("night").map(|s| s.as_str());
+    let stats = db.get_velocity_stats(&class_id, night)?;
+    Ok(Json(stats))
+}
+
+async fn metrics_engagement_gaps(
+    Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<EngagementGap>>, ApiError> {
+    let db = state.db.lock().await;
+    let night = params.get("night").map(|s| s.as_str());
+    let gaps = db.get_engagement_gaps(&class_id, night)?;
+    Ok(Json(gaps))
+}
+
+async fn metrics_assignment_difficulty(
+    Path(class_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<AssignmentDifficulty>>, ApiError> {
+    let db = state.db.lock().await;
+    let night = params.get("night").map(|s| s.as_str());
+    let difficulty = db.get_assignment_difficulty(&class_id, night)?;
+    Ok(Json(difficulty))
 }
 
 async fn metrics_day_of_week(
@@ -437,6 +493,26 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/classes/:class_id/metrics/night-summary",
             get(metrics_night_summary),
+        )
+        .route(
+            "/classes/:class_id/metrics/assignment-types",
+            get(metrics_assignment_types),
+        )
+        .route(
+            "/classes/:class_id/metrics/grade-distribution",
+            get(metrics_grade_distribution),
+        )
+        .route(
+            "/classes/:class_id/metrics/velocity",
+            get(metrics_velocity),
+        )
+        .route(
+            "/classes/:class_id/metrics/engagement-gaps",
+            get(metrics_engagement_gaps),
+        )
+        .route(
+            "/classes/:class_id/metrics/assignment-difficulty",
+            get(metrics_assignment_difficulty),
         )
         .route(
             "/classes/:class_id/metrics/day-of-week",

@@ -236,33 +236,49 @@ async function loadSummary() {
     : "N/A";
 }
 
-async function loadBlockers() {
+async function loadAssignmentDifficulty() {
   const globalNightFilter = document.getElementById("global-night-filter")?.value;
   const endpoint = globalNightFilter
-    ? `/classes/${currentClassId}/metrics/blockers?night=${globalNightFilter}`
-    : `/classes/${currentClassId}/metrics/blockers`;
+    ? `/classes/${currentClassId}/metrics/assignment-difficulty?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/assignment-difficulty`;
   const data = await fetchData(endpoint);
-  const tbody = document.getElementById("blockers-body");
+  const tbody = document.getElementById("difficulty-body");
 
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4">No data available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">No data available</td></tr>';
     return;
   }
 
   tbody.innerHTML = data
-    .slice(0, 8)
+    .slice(0, 10)
     .map((item) => {
+      // Color code difficulty: red (high), yellow (medium), green (low)
+      let difficultyColor = "#10b981"; // green
+      if (item.difficulty_score > 0.6) difficultyColor = "#ef4444"; // red
+      else if (item.difficulty_score > 0.4) difficultyColor = "#fbbf24"; // yellow
+      
       return `
                 <tr style="cursor:pointer;" onclick="openAssignmentModal('${
                   item.assignment_id
                 }', '${item.name.replace(/'/g, "\\'")}')">
                     <td>${item.section || "-"}</td>
                     <td title="${item.name}">${
-        item.name.length > 35 ? item.name.substring(0, 35) + "..." : item.name
+        item.name.length > 30 ? item.name.substring(0, 30) + "..." : item.name
       }</td>
+                    <td style="text-transform: capitalize;">${item.assignment_type}</td>
                     <td>
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <div class="progress-bar" style="width:80px;">
+                            <div class="progress-bar" style="width:60px;">
+                                <div class="fill" style="width:${
+                                  item.difficulty_score * 100
+                                }%; background: ${difficultyColor};"></div>
+                            </div>
+                            <span style="color: ${difficultyColor}; font-weight: 600;">${(item.difficulty_score * 100).toFixed(0)}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div class="progress-bar" style="width:60px;">
                                 <div class="fill" style="width:${
                                   item.completion_rate * 100
                                 }%"></div>
@@ -279,10 +295,17 @@ async function loadBlockers() {
     .join("");
 }
 
+// Keep old loadBlockers for backward compatibility but point to new function
+async function loadBlockers() {
+  return loadAssignmentDifficulty();
+}
+
 async function loadStudentHealth() {
-  const data = await fetchData(
-    `/classes/${currentClassId}/metrics/student-health`
-  );
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/student-health?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/student-health`;
+  const data = await fetchData(endpoint);
   const tbody = document.getElementById("risk-body");
 
   if (!data || data.length === 0) {
@@ -290,15 +313,8 @@ async function loadStudentHealth() {
     return;
   }
 
-  // Apply global night filter if set
-  const globalNightFilter = document.getElementById("global-night-filter")?.value;
-  let filteredData = data;
-  if (globalNightFilter) {
-    filteredData = data.filter(s => s.night && s.night.toLowerCase() === globalNightFilter.toLowerCase());
-  }
-
   // Show only at-risk students (not low risk)
-  const atRisk = filteredData.filter((s) => s.risk !== "low").slice(0, 10);
+  const atRisk = data.filter((s) => s.risk !== "low").slice(0, 10);
 
   if (atRisk.length === 0) {
     tbody.innerHTML =
@@ -827,7 +843,7 @@ async function openAssignmentModal(assignmentId, assignmentName) {
     "Loading student completion data...";
 
   // Fetch all students and their status for this assignment
-  const students = await fetchData(`/classes/${currentClassId}/students`);
+  let students = await fetchData(`/classes/${currentClassId}/students`);
   const progressions = await fetchData(
     `/classes/${currentClassId}/progressions`
   );
@@ -838,10 +854,18 @@ async function openAssignmentModal(assignmentId, assignmentName) {
     return;
   }
 
-  // Build completion map
+  // Apply night filter if active
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  
+  if (globalNightFilter && globalNightFilter !== "") {
+    students = students.filter(s => s.night && s.night.toLowerCase() === globalNightFilter.toLowerCase());
+  }
+
+  // Build completion map (only for filtered students)
+  const studentIds = new Set(students.map(s => s.id));
   const completionMap = {};
   progressions.forEach((p) => {
-    if (p.assignment_id === assignmentId) {
+    if (p.assignment_id === assignmentId && studentIds.has(p.student_id)) {
       completionMap[p.student_id] = {
         completed: true,
         grade: p.grade,
@@ -1388,9 +1412,11 @@ async function loadNightSummary() {
                           night.mentors && night.mentors.length > 0
                             ? `
                             <div class="mentors">
-                                <strong>Mentors:</strong> ${night.mentors.join(
-                                  ", "
-                                )}
+                                <strong>Mentors:</strong> ${
+                                  demoMode 
+                                    ? night.mentors.map((_, i) => `Mentor ${i + 1}`).join(", ")
+                                    : night.mentors.join(", ")
+                                }
                             </div>
                         `
                             : ""
@@ -1400,6 +1426,220 @@ async function loadNightSummary() {
                   )
                   .join("")}
             </div>`;
+}
+
+async function loadAssignmentTypes() {
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/assignment-types?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/assignment-types`;
+  const data = await fetchData(endpoint);
+  const tbody = document.getElementById("assignment-type-body");
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4">No data available</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data
+    .map((type) => {
+      return `
+        <tr>
+          <td style="text-transform: capitalize;">${type.assignment_type}</td>
+          <td>${type.total_assignments}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="progress-bar" style="width:80px;">
+                <div class="fill" style="width:${type.avg_completion_rate * 100}%"></div>
+              </div>
+              <span>${formatPercent(type.avg_completion_rate)}</span>
+            </div>
+          </td>
+          <td>${type.avg_grade ? formatPercent(type.avg_grade) : "N/A"}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+async function loadGradeDistribution() {
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/grade-distribution?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/grade-distribution`;
+  const data = await fetchData(endpoint);
+  
+  if (!data || data.length === 0) return;
+
+  const ctx = document.getElementById("grade-distribution-chart").getContext("2d");
+  
+  // Destroy existing chart if any
+  const existingChart = Chart.getChart(ctx);
+  if (existingChart) {
+    existingChart.destroy();
+  }
+
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.range),
+      datasets: [
+        {
+          label: "Number of Grades",
+          data: data.map(d => d.count),
+          backgroundColor: "rgba(102, 126, 234, 0.6)",
+          borderColor: "#667eea",
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const item = data[context.dataIndex];
+              return `${item.count} grades (${item.percentage.toFixed(1)}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 },
+          title: {
+            display: true,
+            text: "Count"
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: "Grade Range"
+          }
+        }
+      },
+    },
+  });
+}
+
+async function loadVelocityChart() {
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/velocity?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/velocity`;
+  const data = await fetchData(endpoint);
+  
+  if (!data || data.length === 0) return;
+
+  const ctx = document.getElementById("velocity-chart").getContext("2d");
+  
+  // Destroy existing chart if any
+  const existingChart = Chart.getChart(ctx);
+  if (existingChart) {
+    existingChart.destroy();
+  }
+
+  // Helper to convert ISO week to date range
+  function getWeekDateRange(isoWeek) {
+    const [year, week] = isoWeek.split("-");
+    const weekNum = parseInt(week);
+    const jan1 = new Date(parseInt(year), 0, 1);
+    const daysToMonday = (8 - jan1.getDay()) % 7;
+    const firstMonday = new Date(jan1);
+    firstMonday.setDate(jan1.getDate() + daysToMonday);
+    const weekStart = new Date(firstMonday);
+    weekStart.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const fmt = (d) =>
+      d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${fmt(weekStart)} - ${fmt(weekEnd)}`;
+  }
+
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: data.map(d => getWeekDateRange(d.week)),
+      datasets: [
+        {
+          label: "Avg Assignments/Student/Week",
+          data: data.map(d => d.avg_completions_per_student),
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const item = data[context.dataIndex];
+              return [
+                `Avg: ${item.avg_completions_per_student.toFixed(1)} assignments/student`,
+                `Total: ${item.total_completions} completions`,
+                `Active: ${item.active_students} students`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: "Assignments per Student"
+          }
+        }
+      },
+    },
+  });
+}
+
+async function loadEngagementGaps() {
+  const globalNightFilter = document.getElementById("global-night-filter")?.value;
+  const endpoint = globalNightFilter
+    ? `/classes/${currentClassId}/metrics/engagement-gaps?night=${globalNightFilter}`
+    : `/classes/${currentClassId}/metrics/engagement-gaps`;
+  const data = await fetchData(endpoint);
+  
+  const alert = document.getElementById("engagement-gap-alert");
+  const list = document.getElementById("engagement-gap-list");
+  
+  if (!data || data.length === 0) {
+    alert.style.display = "none";
+    return;
+  }
+  
+  alert.style.display = "block";
+  list.innerHTML = data.slice(0, 5).map((student, index) => `
+    <div style="padding: 8px; background: white; margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openStudentModal('${student.student_id}')">
+      <div>
+        <strong>${maskName(student.first_name, student.last_name, index)}</strong>
+        <span style="color: #666; font-size: 0.85rem; margin-left: 10px;">${student.night || 'No night'}</span>
+      </div>
+      <div style="text-align: right;">
+        <span style="color: #856404; font-weight: 600;">${student.days_inactive} days inactive</span>
+        <span style="color: #666; font-size: 0.85rem; margin-left: 10px;">${Math.round(student.completion_pct * 100)}% complete</span>
+      </div>
+    </div>
+  `).join('');
+  
+  if (data.length > 5) {
+    list.innerHTML += `<p style="color: #856404; font-size: 0.85rem; margin-top: 8px;">...and ${data.length - 5} more students</p>`;
+  }
 }
 
 // Load all data
@@ -1412,7 +1652,11 @@ async function init() {
     loadBlockers(),
     loadStudentHealth(),
     loadStudentActivity(),
+    loadEngagementGaps(),
     loadNightSummary(),
+    loadAssignmentTypes(),
+    loadGradeDistribution(),
+    loadVelocityChart(),
     loadProgressChart(),
     loadDayOfWeekChart(),
     loadTimeOfDayChart(),
@@ -1474,7 +1718,7 @@ function applyNightFilter() {
   }
   
   // Clear existing charts before reloading
-  const chartIds = ['progress-chart', 'day-of-week-chart', 'time-of-day-chart'];
+  const chartIds = ['progress-chart', 'velocity-chart', 'day-of-week-chart', 'time-of-day-chart', 'grade-distribution-chart'];
   chartIds.forEach(id => {
     const canvas = document.getElementById(id);
     if (canvas) {
@@ -1488,6 +1732,10 @@ function applyNightFilter() {
   loadBlockers();
   loadStudentHealth();
   loadStudentActivity();
+  loadEngagementGaps();
+  loadAssignmentTypes();
+  loadGradeDistribution();
+  loadVelocityChart();
   loadProgressChart();
   loadDayOfWeekChart();
   loadTimeOfDayChart();
@@ -1496,7 +1744,7 @@ function applyNightFilter() {
 
 // Table sorting functionality
 function initTableSorting() {
-  const tables = ["blockers-table", "risk-table", "activity-table"];
+  const tables = ["difficulty-table", "risk-table", "activity-table"];
 
   tables.forEach((tableId) => {
     const table = document.getElementById(tableId);
