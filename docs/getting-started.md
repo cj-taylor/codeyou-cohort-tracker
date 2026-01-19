@@ -2,6 +2,17 @@
 
 This guide will help you get the Cohort Tracker running. No Rust experience required to start.
 
+## Table of Contents
+
+- [What Does This Thing Do?](#what-does-this-thing-do)
+- [Before You Start](#before-you-start)
+- [First Time Setup](#first-time-setup)
+- [Daily Usage](#daily-usage)
+- [Understanding the Dashboard](#understanding-the-dashboard)
+- [Common Tasks](#common-tasks)
+- [Troubleshooting](#troubleshooting)
+- [What's Next?](#whats-next)
+
 ## What Does This Thing Do?
 
 Cohort Tracker pulls student progress data from OpenClass.ai and stores it locally in a database. Then it gives you:

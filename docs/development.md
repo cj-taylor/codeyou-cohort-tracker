@@ -2,6 +2,18 @@
 
 This guide helps you contribute to and extend the Cohort Tracker project.
 
+## Table of Contents
+
+- [Getting Started](#getting-started)
+- [Development Workflow](#development-workflow)
+- [Code Organization](#code-organization)
+- [Testing Strategy](#testing-strategy)
+- [Error Handling Patterns](#error-handling-patterns)
+- [Performance Considerations](#performance-considerations)
+- [Common Development Tasks](#common-development-tasks)
+- [Debugging Tips](#debugging-tips)
+- [Contributing Guidelines](#contributing-guidelines)
+
 ## Getting Started
 
 ### Prerequisites

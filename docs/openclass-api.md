@@ -2,6 +2,18 @@
 
 This document explains how Cohort Tracker integrates with the OpenClass.ai API to fetch student progression data.
 
+## Table of Contents
+
+- [API Overview](#api-overview)
+- [Authentication Flow](#authentication-flow)
+- [Classes API](#classes-api)
+- [Progressions API](#progressions-api)
+- [Rust Type Definitions](#rust-type-definitions)
+- [Pagination Handling](#pagination-handling)
+- [Data Transformation](#data-transformation)
+- [Error Handling](#error-handling)
+- [Rate Limiting and Best Practices](#rate-limiting-and-best-practices)
+
 ## API Overview
 
 OpenClass provides a REST API for accessing student data. We use three main endpoints:

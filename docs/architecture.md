@@ -2,6 +2,18 @@
 
 This document explains how the Cohort Tracker code is organized and how the different parts work together. If you're new to the project, start here to get your bearings.
 
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Why This Structure?](#why-this-structure)
+- [Core Concepts](#core-concepts)
+- [Data Flow](#data-flow)
+- [Key Design Patterns](#key-design-patterns)
+- [Module Organization Rules](#module-organization-rules)
+- [Where to Add New Code](#where-to-add-new-code)
+- [Testing Strategy](#testing-strategy)
+- [Common Patterns](#common-patterns)
+
 ## Project Structure
 
 ```

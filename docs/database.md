@@ -2,6 +2,17 @@
 
 This document explains the SQLite database schema used by Cohort Tracker and the reasoning behind design decisions.
 
+## Table of Contents
+
+- [Schema Overview](#schema-overview)
+- [Table Definitions](#table-definitions)
+- [Indexes for Performance](#indexes-for-performance)
+- [Common Queries](#common-queries)
+- [Data Types and Constraints](#data-types-and-constraints)
+- [Database Operations in Code](#database-operations-in-code)
+- [Migration Strategy](#migration-strategy)
+- [Performance Optimization](#performance-optimization)
+
 ## Schema Overview
 
 The database consists of five main tables that store student progression data from OpenClass:
