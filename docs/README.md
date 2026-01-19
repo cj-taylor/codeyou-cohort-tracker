@@ -18,6 +18,7 @@ The Rust concepts used in this codebase, explained simply.
 ### Using the Tool
 
 - **[Getting Started](./getting-started.md)** - Installation, first sync, daily usage
+- **[Dashboard Guide](./dashboard-guide.md)** - Complete walkthrough of dashboard features with screenshots
 - **[Database Schema](./database.md)** - What data we store and how to query it
 
 ### Understanding the Code
@@ -41,6 +42,7 @@ The Rust concepts used in this codebase, explained simply.
 **I want to...**
 
 - **Get it running** → [Getting Started](./getting-started.md)
+- **Learn to use the dashboard** → [Dashboard Guide](./dashboard-guide.md)
 - **Add a new CLI command** → [Development Guide](./development.md) and `src/cli.rs`
 - **Add a new database query** → [Database Schema](./database.md) and `src/db/queries.rs`
 - **Add a new API endpoint** → `src/api.rs`

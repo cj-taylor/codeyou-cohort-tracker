@@ -93,6 +93,7 @@ cargo run -- deactivate old-class-name
 
 **Start here:**
 - [Getting Started](./docs/getting-started.md) - Detailed setup and usage guide
+- [Dashboard Guide](./docs/dashboard-guide.md) - Complete walkthrough of the dashboard features
 - [Architecture](./docs/architecture.md) - How the code is organized
 - [Rust Basics](./docs/rust-basics.md) - Rust concepts used in this project
 

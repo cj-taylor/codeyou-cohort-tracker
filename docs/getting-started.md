@@ -181,6 +181,10 @@ Once you open http://localhost:3000, you'll see:
 - Who hasn't submitted anything in a while
 - Filter by night/cohort
 
+**For a complete walkthrough with screenshots:** See the [Dashboard Guide](./dashboard-guide.md)
+- Who hasn't submitted anything in a while
+- Filter by night/cohort
+
 ## Common Tasks
 
 ### I Want to See Who's Struggling
@@ -316,6 +320,7 @@ cargo run -- server        # Start API server
 
 ## Need Help?
 
-- Check the [docs/](.) folder for detailed guides
-- Look at the code - it has comments where things get tricky
+- **Dashboard features** → [Dashboard Guide](./dashboard-guide.md) - Complete walkthrough with screenshots
+- **Other guides** → Check the [docs/](.) folder for detailed documentation
+- **Code questions** → Look at the code - it has comments where things get tricky
 - The Rust compiler is helpful with error messages
