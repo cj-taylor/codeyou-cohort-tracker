@@ -15,7 +15,7 @@ clap = { version = "4.4", features = ["derive"] }
 toml = "0.8"
 openssl = "0.10"
 urlencoding = "2.1"
-axum = "0.7"
+axum = "0.8"
 tower-http = { version = "0.5", features = ["cors", "fs"] }
 chrono = "0.4"
 async-trait = "0.1"
