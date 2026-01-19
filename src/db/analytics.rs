@@ -1051,7 +1051,7 @@ impl Database {
             if completion_pct > 0.5 {
                 if let Some(ref date_str) = last_activity {
                     if let Ok(days_inactive) = self.calculate_days_since(date_str) {
-                        if days_inactive >= 7 && days_inactive <= 14 {
+                        if (7..=14).contains(&days_inactive) {
                             gaps.push(EngagementGap {
                                 student_id: stmt.read::<String>(0)?,
                                 first_name: stmt.read::<String>(1)?,
