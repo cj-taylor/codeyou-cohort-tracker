@@ -1,0 +1,40 @@
+name: Close Stale Issues and PRs
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/stale@v9
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        
+        stale-issue-message: |
+          Hey there! This issue has been quiet for a while. 
+          
+          If it's still relevant, just leave a comment and I'll keep it open. Otherwise, I'll close it in a week to keep things tidy.
+        close-issue-message: |
+          Closing this due to inactivity. Feel free to reopen if it's still relevant!
+        days-before-issue-stale: 60
+        days-before-issue-close: 7
+        stale-issue-label: stale
+        exempt-issue-labels: 'pinned,security,good first issue'
+        
+        stale-pr-message: |
+          This PR has been sitting for a while. 
+          
+          If you're still working on it, let me know! Otherwise, I'll close it in a week.
+        close-pr-message: |
+          Closing this PR due to inactivity. Thanks for the contribution. Feel free to reopen if you want to continue working on it!
+        days-before-pr-stale: 30
+        days-before-pr-close: 7
+        stale-pr-label: stale
+        exempt-pr-labels: 'pinned,security'
