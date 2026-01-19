@@ -39,11 +39,25 @@ Open http://localhost:3000 to view the dashboard.
 
 ## What You Get
 
-- Dashboard with visual overview of student progress and completion rates
-- Analytics to identify struggling students and blocker assignments
-- Local SQLite database you can query directly
-- REST API for building your own tools
-- Fast incremental sync (only fetches new data)
+### Core Features
+- **Dashboard** with visual overview of student progress and completion rates
+- **Analytics** to identify struggling students and blocker assignments
+- **Night Filtering** to compare performance across different cohort nights
+- **Local SQLite database** you can query directly
+- **REST API** for building your own tools
+- **Fast incremental sync** (only fetches new data)
+
+### Analytics & Diagnostics
+- **Assignment Type Breakdown** - Compare performance on lessons vs quizzes
+- **Grade Distribution** - Visualize grade spread to identify struggling subgroups
+- **Velocity Tracking** - Monitor student pace (assignments/week) to catch slowdowns early
+- **Engagement Gap Detection** - Early warning for students who go silent (7-14 days inactive)
+- **Assignment Difficulty Ranking** - Composite scoring to prioritize curriculum fixes
+- **Students at Risk** - Automatic risk scoring based on completion and grades
+- **Activity Monitoring** - Track last activity and days inactive per student
+- **Performance by Night** - Compare mentor groups and cohort nights
+- **Progress Over Time** - Weekly completion trends with drill-down
+- **Section Progress** - See which course sections students are stuck on
 
 ## Daily Usage
 
