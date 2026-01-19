@@ -79,12 +79,24 @@ jobs:
           
           ## Installation
           
-          Download the binary for your platform below, make it executable, and move it to your PATH.
+          Download the binary for your platform below.
           
-          **macOS/Linux:**
+          **macOS:**
+          
+          The binaries are not signed with an Apple Developer certificate. After downloading:
+          
           ```bash
-          chmod +x cohort-tracker-*
-          sudo mv cohort-tracker-* /usr/local/bin/cohort-tracker
+          chmod +x cohort-tracker-macos-*
+          xattr -d com.apple.quarantine cohort-tracker-macos-*
+          sudo mv cohort-tracker-macos-* /usr/local/bin/cohort-tracker
+          ```
+          
+          The `xattr` command removes the quarantine flag that triggers the Gatekeeper warning.
+          
+          **Linux:**
+          ```bash
+          chmod +x cohort-tracker-linux-amd64
+          sudo mv cohort-tracker-linux-amd64 /usr/local/bin/cohort-tracker
           ```
           
           **Windows:**
