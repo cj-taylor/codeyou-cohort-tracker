@@ -7,6 +7,8 @@ Releases are tagged with the date in YYYY.MM.DD format (e.g., v2026.01.19).
 ## [Unreleased]
 
 ### Added
+- Self-update functionality with `update` command
+- Automatic version checking (checks GitHub for latest release)
 
 ### Changed
 

@@ -5,3 +5,4 @@ pub mod db;
 pub mod lms;
 pub mod models;
 pub mod sync;
+pub mod update;

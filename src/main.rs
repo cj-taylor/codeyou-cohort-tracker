@@ -37,6 +37,9 @@ async fn main() -> Result<()> {
         cli::Commands::Import { students, mentors } => {
             cli::handle_import(students, mentors).await?;
         }
+        cli::Commands::Update => {
+            cohort_tracker::update::perform_update().await?;
+        }
     }
 
     Ok(())

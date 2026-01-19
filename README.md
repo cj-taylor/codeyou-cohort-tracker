@@ -70,6 +70,9 @@ cargo run -- status
 
 # Start the dashboard
 make serve
+
+# Update to the latest version
+cargo run -- update
 ```
 
 ## Common Commands
@@ -87,6 +90,9 @@ cargo run -- list
 # Activate/deactivate classes
 cargo run -- activate data-analysis-pathway-module-1-aug-2
 cargo run -- deactivate old-class-name
+
+# Update to latest version
+cargo run -- update
 ```
 
 ## Documentation

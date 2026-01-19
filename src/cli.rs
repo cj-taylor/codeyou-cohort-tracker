@@ -64,6 +64,9 @@ pub enum Commands {
         #[arg(long)]
         mentors: Option<String>,
     },
+
+    /// Update to the latest version
+    Update,
 }
 
 pub async fn handle_init(email: String, password: String, api_base: String) -> Result<()> {
