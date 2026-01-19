@@ -76,11 +76,13 @@ jobs:
         ls -la release/
     
     - name: Create release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: release/*
-        body: |
-          ## What's new in this release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create ${{ github.ref_name }} \
+          release/* \
+          --title "${{ github.ref_name }}" \
+          --notes "## What's new in this release
           
           Check the [CHANGELOG](CHANGELOG.md) for details.
           
@@ -92,21 +94,19 @@ jobs:
           
           The binaries are not signed with an Apple Developer certificate. After downloading:
           
-          ```bash
+          \`\`\`bash
           chmod +x cohort-tracker-macos-*
           xattr -d com.apple.quarantine cohort-tracker-macos-*
           sudo mv cohort-tracker-macos-* /usr/local/bin/cohort-tracker
-          ```
+          \`\`\`
           
-          The `xattr` command removes the quarantine flag that triggers the Gatekeeper warning.
+          The \`xattr\` command removes the quarantine flag that triggers the Gatekeeper warning.
           
           **Linux:**
-          ```bash
+          \`\`\`bash
           chmod +x cohort-tracker-linux-amd64
           sudo mv cohort-tracker-linux-amd64 /usr/local/bin/cohort-tracker
-          ```
+          \`\`\`
           
           **Windows:**
-          Move the .exe to a directory in your PATH.
-        draft: false
-        prerelease: false
+          Move the .exe to a directory in your PATH."
