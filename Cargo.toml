@@ -12,7 +12,7 @@ sqlite = "0.27"
 anyhow = "1.0"
 dotenv = "0.15"
 clap = { version = "4.4", features = ["derive"] }
-toml = "0.8"
+toml = "0.9"
 openssl = "0.10"
 urlencoding = "2.1"
 axum = "0.7"
