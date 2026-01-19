@@ -17,10 +17,11 @@ use tower_http::services::ServeDir;
 use crate::db::Database;
 #[allow(unused_imports)]
 use crate::models::{
-    Assignment, AssignmentDifficulty, AssignmentTypeStats, BlockerAssignment, Class, CompletionMetrics, 
-    DayOfWeekStats, EngagementGap, GradeDistribution, Mentor, NightSummary, ProgressSummary, 
-    ProgressionRecord, SectionProgress, Student, StudentActivity, StudentAssignmentStatus, StudentDetail, 
-    StudentHealth, StudentProgressPoint, VelocityStats, WeeklyProgress,
+    Assignment, AssignmentDifficulty, AssignmentTypeStats, BlockerAssignment, Class,
+    CompletionMetrics, DayOfWeekStats, EngagementGap, GradeDistribution, Mentor, NightSummary,
+    ProgressSummary, ProgressionRecord, SectionProgress, Student, StudentActivity,
+    StudentAssignmentStatus, StudentDetail, StudentHealth, StudentProgressPoint, VelocityStats,
+    WeeklyProgress,
 };
 
 pub struct AppState {
@@ -502,10 +503,7 @@ fn create_router(state: Arc<AppState>) -> Router {
             "/classes/:class_id/metrics/grade-distribution",
             get(metrics_grade_distribution),
         )
-        .route(
-            "/classes/:class_id/metrics/velocity",
-            get(metrics_velocity),
-        )
+        .route("/classes/:class_id/metrics/velocity", get(metrics_velocity))
         .route(
             "/classes/:class_id/metrics/engagement-gaps",
             get(metrics_engagement_gaps),

@@ -5,9 +5,15 @@ use anyhow::Result;
 use crate::models::*;
 
 impl Database {
-    pub fn get_progress_summary(&self, class_id: &str, night: Option<&str>) -> Result<ProgressSummary> {
+    pub fn get_progress_summary(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<ProgressSummary> {
         let total_students = if let Some(night_val) = night {
-            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let stmt = self
+                .conn
+                .prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
                 sqlite::State::Row => stmt.read::<i64>(0)?,
@@ -16,14 +22,14 @@ impl Database {
         } else {
             self.get_student_count_by_class(class_id)?
         };
-        
+
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
-        
+
         let total_progressions = if let Some(night_val) = night {
             let stmt = self.conn.prepare(
                 "SELECT COUNT(*) FROM progressions p 
                  JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
-                 WHERE p.class_id = ? AND s.night = ?"
+                 WHERE p.class_id = ? AND s.night = ?",
             )?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
@@ -38,7 +44,7 @@ impl Database {
             let stmt = self.conn.prepare(
                 "SELECT AVG(p.grade) FROM progressions p 
                  JOIN students s ON p.student_id = s.id AND p.class_id = s.class_id
-                 WHERE p.grade IS NOT NULL AND p.class_id = ? AND s.night = ?"
+                 WHERE p.grade IS NOT NULL AND p.class_id = ? AND s.night = ?",
             )?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
@@ -128,9 +134,16 @@ impl Database {
         })
     }
 
-    pub fn get_blockers(&self, class_id: &str, limit: usize, night: Option<&str>) -> Result<Vec<BlockerAssignment>> {
+    pub fn get_blockers(
+        &self,
+        class_id: &str,
+        limit: usize,
+        night: Option<&str>,
+    ) -> Result<Vec<BlockerAssignment>> {
         let total_students = if let Some(night_val) = night {
-            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let stmt = self
+                .conn
+                .prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
                 sqlite::State::Row => stmt.read::<i64>(0)?,
@@ -165,7 +178,10 @@ impl Database {
 
         let stmt = self.conn.prepare(query)?;
         let mut stmt = if let Some(night_val) = night {
-            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?.bind(4, limit as i64)?
+            stmt.bind(1, night_val)?
+                .bind(2, night_val)?
+                .bind(3, class_id)?
+                .bind(4, limit as i64)?
         } else {
             stmt.bind(1, class_id)?.bind(2, limit as i64)?
         };
@@ -195,7 +211,11 @@ impl Database {
         Ok(blockers)
     }
 
-    pub fn get_student_health(&self, class_id: &str, night: Option<&str>) -> Result<Vec<StudentHealth>> {
+    pub fn get_student_health(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<StudentHealth>> {
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
 
         let query = if night.is_some() {
@@ -262,7 +282,11 @@ impl Database {
         Ok(students)
     }
 
-    pub fn get_progress_over_time(&self, class_id: &str, night: Option<&str>) -> Result<Vec<WeeklyProgress>> {
+    pub fn get_progress_over_time(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<WeeklyProgress>> {
         let query = if night.is_some() {
             "SELECT strftime('%Y-%W', p.completed_at) as week,
                     COUNT(*) as completed
@@ -592,7 +616,11 @@ impl Database {
         Ok(duration.num_days())
     }
 
-    pub fn get_completions_by_day_of_week(&self, class_id: &str, night: Option<&str>) -> Result<Vec<DayOfWeekStats>> {
+    pub fn get_completions_by_day_of_week(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<DayOfWeekStats>> {
         let query = if night.is_some() {
             "SELECT 
                 CASE CAST(strftime('%w', p.completed_at) AS INTEGER)
@@ -682,7 +710,11 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_completions_by_time_of_day(&self, class_id: &str, night: Option<&str>) -> Result<Vec<DayOfWeekStats>> {
+    pub fn get_completions_by_time_of_day(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<DayOfWeekStats>> {
         let query = if night.is_some() {
             "SELECT 
                 CASE 
@@ -778,9 +810,15 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_assignment_type_stats(&self, class_id: &str, night: Option<&str>) -> Result<Vec<AssignmentTypeStats>> {
+    pub fn get_assignment_type_stats(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<AssignmentTypeStats>> {
         let total_students = if let Some(night_val) = night {
-            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let stmt = self
+                .conn
+                .prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
                 sqlite::State::Row => stmt.read::<i64>(0)?,
@@ -817,7 +855,9 @@ impl Database {
 
         let stmt = self.conn.prepare(query)?;
         let mut stmt = if let Some(night_val) = night {
-            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?
+            stmt.bind(1, night_val)?
+                .bind(2, night_val)?
+                .bind(3, class_id)?
         } else {
             stmt.bind(1, class_id)?
         };
@@ -828,7 +868,7 @@ impl Database {
             let total_assignments = stmt.read::<i64>(1)?;
             let total_completions = stmt.read::<i64>(2)?;
             let avg_grade = stmt.read::<Option<f64>>(3)?;
-            
+
             let expected_completions = total_students * total_assignments;
             let avg_completion_rate = if expected_completions > 0 {
                 total_completions as f64 / expected_completions as f64
@@ -847,7 +887,11 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_grade_distribution(&self, class_id: &str, night: Option<&str>) -> Result<Vec<GradeDistribution>> {
+    pub fn get_grade_distribution(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<GradeDistribution>> {
         let query = if night.is_some() {
             "SELECT p.grade
              FROM progressions p
@@ -901,7 +945,11 @@ impl Database {
         Ok(distribution)
     }
 
-    pub fn get_velocity_stats(&self, class_id: &str, night: Option<&str>) -> Result<Vec<VelocityStats>> {
+    pub fn get_velocity_stats(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<VelocityStats>> {
         let query = if night.is_some() {
             "SELECT 
                 strftime('%Y-%W', p.completed_at) as week,
@@ -936,7 +984,7 @@ impl Database {
             let week = stmt.read::<String>(0)?;
             let total_completions = stmt.read::<i64>(1)?;
             let active_students = stmt.read::<i64>(2)?;
-            
+
             let avg_completions_per_student = if active_students > 0 {
                 total_completions as f64 / active_students as f64
             } else {
@@ -954,9 +1002,13 @@ impl Database {
         Ok(results)
     }
 
-    pub fn get_engagement_gaps(&self, class_id: &str, night: Option<&str>) -> Result<Vec<EngagementGap>> {
+    pub fn get_engagement_gaps(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<EngagementGap>> {
         let total_assignments = self.get_assignment_count_by_class(class_id)?;
-        
+
         let query = if night.is_some() {
             "SELECT s.id, s.first_name, s.last_name, s.email, s.night,
                     MAX(p.completed_at) as last_activity,
@@ -1022,9 +1074,15 @@ impl Database {
         Ok(gaps)
     }
 
-    pub fn get_assignment_difficulty(&self, class_id: &str, night: Option<&str>) -> Result<Vec<AssignmentDifficulty>> {
+    pub fn get_assignment_difficulty(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<AssignmentDifficulty>> {
         let total_students = if let Some(night_val) = night {
-            let stmt = self.conn.prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
+            let stmt = self
+                .conn
+                .prepare("SELECT COUNT(*) FROM students WHERE class_id = ? AND night = ?")?;
             let mut stmt = stmt.bind(1, class_id)?.bind(2, night_val)?;
             match stmt.next()? {
                 sqlite::State::Row => stmt.read::<i64>(0)?,
@@ -1055,7 +1113,9 @@ impl Database {
 
         let stmt = self.conn.prepare(query)?;
         let mut stmt = if let Some(night_val) = night {
-            stmt.bind(1, night_val)?.bind(2, night_val)?.bind(3, class_id)?
+            stmt.bind(1, night_val)?
+                .bind(2, night_val)?
+                .bind(3, class_id)?
         } else {
             stmt.bind(1, class_id)?
         };
@@ -1065,7 +1125,7 @@ impl Database {
         while let sqlite::State::Row = stmt.next()? {
             let completions = stmt.read::<i64>(4)?;
             let avg_grade = stmt.read::<Option<f64>>(5)?;
-            
+
             let completion_rate = if total_students > 0 {
                 completions as f64 / total_students as f64
             } else {
@@ -1102,7 +1162,11 @@ impl Database {
         Ok(difficulties)
     }
 
-    pub fn get_section_progress(&self, class_id: &str, night: Option<&str>) -> Result<Vec<SectionProgress>> {
+    pub fn get_section_progress(
+        &self,
+        class_id: &str,
+        night: Option<&str>,
+    ) -> Result<Vec<SectionProgress>> {
         let query = if night.is_some() {
             "SELECT 
                 a.section,
@@ -1131,7 +1195,9 @@ impl Database {
 
         let stmt = self.conn.prepare(query)?;
         let mut stmt = if let Some(night_val) = night {
-            stmt.bind(1, class_id)?.bind(2, night_val)?.bind(3, class_id)?
+            stmt.bind(1, class_id)?
+                .bind(2, night_val)?
+                .bind(3, class_id)?
         } else {
             stmt.bind(1, class_id)?.bind(2, class_id)?
         };
