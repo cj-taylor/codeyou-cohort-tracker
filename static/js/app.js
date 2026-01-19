@@ -5,6 +5,13 @@ let demoMode = true; // Demo mode on by default
 let previousSectionModal = null; // Track which section modal was open
 let assignmentNameMap = {}; // Map assignment IDs to their display names for demo mode
 
+// Escape function for inline event handlers
+function escapeForAttr(str) {
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
 // Demo mode functions
 function toggleDemoMode() {
   const classListCheckbox = document.getElementById("demo-mode");
@@ -296,7 +303,7 @@ async function loadAssignmentDifficulty() {
       return `
                 <tr style="cursor:pointer;" onclick="openAssignmentModal('${
                   item.assignment_id
-                }', '${displayName.replace(/'/g, "\\'")}')">
+                }', '${escapeForAttr(displayName)}')">
                     <td>${displaySection}</td>
                     <td title="${displayName}">${
         displayName.length > 30 ? displayName.substring(0, 30) + "..." : displayName
@@ -1336,7 +1343,7 @@ async function loadSectionProgress() {
       const displaySection = maskSectionName(section.section, index);
       
       return `
-        <tr style="cursor:pointer;" onclick="openSectionModal('${section.section.replace(/'/g, "\\'")}')">
+        <tr style="cursor:pointer;" onclick="openSectionModal('${escapeForAttr(section.section)}')">
           <td>${displaySection}</td>
           <td data-value="${section.students_started}">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -2013,7 +2020,7 @@ async function openSectionModal(sectionName) {
   } else {
     notStartedBody.innerHTML = notStarted
       .map((sp, index) => `
-        <tr style="cursor:pointer;" onclick="previousSectionModal = '${sectionName.replace(/'/g, "\\'")}'; closeSectionModal(); openStudentModal('${sp.student.id}')">
+        <tr style="cursor:pointer;" onclick="previousSectionModal = '${escapeForAttr(sectionName)}'; closeSectionModal(); openStudentModal('${sp.student.id}')">
           <td>${maskName(sp.student.first_name, sp.student.last_name, index)}</td>
           <td>${sp.student.night || '-'}</td>
         </tr>
@@ -2030,7 +2037,7 @@ async function openSectionModal(sectionName) {
       .map((sp, index) => {
         const progressPct = (sp.completed / sp.total) * 100;
         return `
-          <tr style="cursor:pointer;" onclick="previousSectionModal = '${sectionName.replace(/'/g, "\\'")}'; closeSectionModal(); openStudentModal('${sp.student.id}')">
+          <tr style="cursor:pointer;" onclick="previousSectionModal = '${escapeForAttr(sectionName)}'; closeSectionModal(); openStudentModal('${sp.student.id}')">
             <td>${maskName(sp.student.first_name, sp.student.last_name, index)}</td>
             <td>${sp.student.night || '-'}</td>
             <td>
