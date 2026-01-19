@@ -174,6 +174,55 @@ pub struct DayOfWeekStats {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AssignmentTypeStats {
+    pub assignment_type: String,
+    pub total_assignments: i64,
+    pub avg_completion_rate: f64,
+    pub avg_grade: Option<f64>,
+    pub total_completions: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GradeDistribution {
+    pub range: String,
+    pub count: i64,
+    pub percentage: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VelocityStats {
+    pub week: String,
+    pub avg_completions_per_student: f64,
+    pub total_completions: i64,
+    pub active_students: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EngagementGap {
+    pub student_id: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub night: Option<String>,
+    pub days_inactive: i64,
+    pub completion_pct: f64,
+    pub last_activity: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AssignmentDifficulty {
+    pub assignment_id: String,
+    pub name: String,
+    pub section: Option<String>,
+    pub assignment_type: String,
+    pub difficulty_score: f64,
+    pub completion_rate: f64,
+    pub avg_grade: Option<f64>,
+    pub total_students: i64,
+    pub completions: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SectionProgress {
     pub section: String,
     pub total_students: i64,
