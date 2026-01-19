@@ -62,10 +62,16 @@ jobs:
       with:
         path: artifacts
     
+    - name: Prepare release assets
+      run: |
+        mkdir -p release
+        find artifacts -type f -exec cp {} release/ \;
+        ls -la release/
+    
     - name: Create release
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/**/*
+        files: release/*
         body: |
           ## What's new in this release
           
