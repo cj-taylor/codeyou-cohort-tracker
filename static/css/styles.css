@@ -8,6 +8,7 @@ body {
   background: #f5f7fa;
   color: #333;
   line-height: 1.6;
+  padding-top: 140px; /* Space for sticky header */
 }
 .container {
   max-width: 1400px;
@@ -15,20 +16,23 @@ body {
   padding: 20px;
 }
 header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 30px;
-  margin-bottom: 30px;
-  border-radius: 12px;
+  padding: 20px 30px;
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 header h1 {
-  font-size: 2rem;
+  font-size: 1.5rem;
   margin-bottom: 5px;
 }
 header p {
   opacity: 0.9;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 .stats-grid {
   display: grid;
@@ -64,6 +68,7 @@ header p {
 }
 
 .section {
+  display: block;
   background: white;
   border-radius: 12px;
   padding: 25px;
@@ -79,34 +84,40 @@ header p {
 }
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 25px;
+  margin-bottom: 25px;
+}
+@media (max-width: 900px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
 }
 table {
   width: 100%;
   border-collapse: collapse;
 }
 #activity-table,
-#blockers-table,
+#difficulty-table,
 #risk-table {
   display: block;
 }
 #activity-table thead,
-#blockers-table thead,
+#difficulty-table thead,
 #risk-table thead {
   display: table;
   width: 100%;
   table-layout: fixed;
 }
 #activity-table tbody,
-#blockers-table tbody,
+#difficulty-table tbody,
 #risk-table tbody {
   display: block;
   max-height: 500px;
   overflow-y: auto;
 }
 #activity-table tbody tr,
-#blockers-table tbody tr,
+#difficulty-table tbody tr,
 #risk-table tbody tr {
   display: table;
   width: 100%;
