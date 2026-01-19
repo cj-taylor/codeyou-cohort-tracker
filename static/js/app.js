@@ -3,6 +3,7 @@ let currentClassId = null;
 let allClasses = [];
 let demoMode = true; // Demo mode on by default
 let previousSectionModal = null; // Track which section modal was open
+let assignmentNameMap = {}; // Map assignment IDs to their display names for demo mode
 
 // Demo mode functions
 function toggleDemoMode() {
@@ -40,6 +41,31 @@ function maskEmail(email, index) {
   return `student${index + 1}@example.com`;
 }
 
+function maskRegion(region) {
+  if (!demoMode) return region;
+  return "Region";
+}
+
+function maskClassName(className, index) {
+  if (!demoMode) return className;
+  return `Class ${index + 1}`;
+}
+
+function maskAssignmentName(assignmentName, index) {
+  if (!demoMode) return assignmentName;
+  // Determine type from original name if possible
+  const lowerName = assignmentName.toLowerCase();
+  if (lowerName.includes('quiz')) return `Quiz ${index + 1}`;
+  if (lowerName.includes('project')) return `Project ${index + 1}`;
+  if (lowerName.includes('exercise')) return `Exercise ${index + 1}`;
+  return `Assignment ${index + 1}`;
+}
+
+function maskSectionName(sectionName, index) {
+  if (!demoMode) return sectionName;
+  return `Section ${index + 1}`;
+}
+
 // Class Selection Functions
 async function loadClasses() {
   try {
@@ -65,17 +91,19 @@ async function loadClasses() {
 function renderClassGrid(classes) {
   const grid = document.getElementById("class-grid");
   grid.innerHTML = classes
-    .map((cls) => {
+    .map((cls, index) => {
       const syncedDate = cls.synced_at
         ? new Date(cls.synced_at).toLocaleString()
         : "Never synced";
+      const displayName = maskClassName(cls.name, index);
+      const displayFriendlyId = demoMode ? `class-${index + 1}` : cls.friendly_id;
       return `
                     <div class="class-card ${cls.is_active ? "" : "inactive"}">
                         <div onclick="selectClass('${cls.id}', '${
         cls.name
       }')" style="cursor: pointer;">
-                            <h3>${cls.name}</h3>
-                            <div class="friendly-id">${cls.friendly_id}</div>
+                            <h3>${displayName}</h3>
+                            <div class="friendly-id">${displayFriendlyId}</div>
                             <div class="status">${
                               cls.is_active ? "✓ Active" : "○ Inactive"
                             }</div>
@@ -157,7 +185,11 @@ function selectClass(classId, className) {
 
   document.getElementById("class-selection").style.display = "none";
   document.getElementById("dashboard").style.display = "block";
-  document.getElementById("class-name").textContent = className;
+  
+  // Find the class index for masking
+  const classIndex = allClasses.findIndex(c => c.id === classId);
+  const displayName = maskClassName(className, classIndex);
+  document.getElementById("class-name").textContent = displayName;
 
   init();
 }
@@ -251,19 +283,23 @@ async function loadAssignmentDifficulty() {
 
   tbody.innerHTML = data
     .slice(0, 10)
-    .map((item) => {
+    .map((item, index) => {
       // Color code difficulty: red (high), yellow (medium), green (low)
       let difficultyColor = "#10b981"; // green
       if (item.difficulty_score > 0.6) difficultyColor = "#ef4444"; // red
       else if (item.difficulty_score > 0.4) difficultyColor = "#fbbf24"; // yellow
       
+      const displayName = maskAssignmentName(item.name, index);
+      const displaySection = item.section ? maskSectionName(item.section, index) : "-";
+      assignmentNameMap[item.assignment_id] = displayName; // Store for modal use
+      
       return `
                 <tr style="cursor:pointer;" onclick="openAssignmentModal('${
                   item.assignment_id
-                }', '${item.name.replace(/'/g, "\\'")}')">
-                    <td>${item.section || "-"}</td>
-                    <td title="${item.name}">${
-        item.name.length > 30 ? item.name.substring(0, 30) + "..." : item.name
+                }', '${displayName.replace(/'/g, "\\'")}')">
+                    <td>${displaySection}</td>
+                    <td title="${displayName}">${
+        displayName.length > 30 ? displayName.substring(0, 30) + "..." : displayName
       }</td>
                     <td style="text-transform: capitalize;">${item.assignment_type}</td>
                     <td>
@@ -496,7 +532,7 @@ async function openStudentModal(studentId) {
   document.getElementById("modal-student-info").innerHTML = `${
     maskEmail(detail.email, studentIndex)
   } | ${detail.night || "No night assigned"} Night | ${
-    detail.region || "No region"
+    maskRegion(detail.region || "No region")
   }`;
 
   // Update stats
@@ -564,13 +600,15 @@ async function openStudentModal(studentId) {
         '<p style="color:#16a34a;">No problem areas identified!</p>';
     } else {
       let html = "";
-      incomplete.slice(0, 5).forEach((a) => {
-        html += `<div class="problem-item incomplete">Not completed: ${a.name}</div>`;
+      incomplete.slice(0, 5).forEach((a, idx) => {
+        const displayName = maskAssignmentName(a.name, idx);
+        html += `<div class="problem-item incomplete">Not completed: ${displayName}</div>`;
       });
-      lowGrade.slice(0, 5).forEach((a) => {
+      lowGrade.slice(0, 5).forEach((a, idx) => {
+        const displayName = maskAssignmentName(a.name, incomplete.length + idx);
         html += `<div class="problem-item low-grade">Low grade (${formatPercent(
           a.grade
-        )}): ${a.name}</div>`;
+        )}): ${displayName}</div>`;
       });
       if (incomplete.length > 5) {
         html += `<div style="color:#666; font-size:0.85rem;">...and ${
@@ -584,7 +622,7 @@ async function openStudentModal(studentId) {
     const assignmentList = document.getElementById("assignment-list");
 
     assignmentList.innerHTML = assignments
-      .map((a) => {
+      .map((a, idx) => {
         let statusClass, statusText;
         if (!a.completed) {
           statusClass = "status-missing";
@@ -605,10 +643,13 @@ async function openStudentModal(studentId) {
             })
           : "-";
 
+        const displayName = maskAssignmentName(a.name, idx);
+        const displaySection = a.section ? maskSectionName(a.section, idx) : "-";
+
         return `
                         <tr>
-                            <td>${a.section || "-"}</td>
-                            <td>${a.name}</td>
+                            <td>${displaySection}</td>
+                            <td>${displayName}</td>
                             <td><span class="assignment-type">${
                               a.assignment_type
                             }</span></td>
@@ -1102,12 +1143,14 @@ async function openWeekModal(isoWeek) {
     }));
 
   tbody.innerHTML = sortedAssignments
-    .map(({ assignment, count }) => {
+    .map(({ assignment, count }, idx) => {
       if (!assignment) return '';
+      const displayName = maskAssignmentName(assignment.name, idx);
+      const displaySection = assignment.section ? maskSectionName(assignment.section, idx) : '-';
       return `
         <tr>
-          <td>${assignment.section || '-'}</td>
-          <td>${assignment.name}</td>
+          <td>${displaySection}</td>
+          <td>${displayName}</td>
           <td>${count}</td>
         </tr>
       `;
@@ -1283,16 +1326,18 @@ async function loadSectionProgress() {
   }
 
   tbody.innerHTML = data
-    .map((section) => {
+    .map((section, index) => {
       const startedRate = (section.students_started / section.total_students) * 100;
       const completedRate = (section.students_completed / section.total_students) * 100;
       const completionRate = section.students_started > 0
         ? (section.students_completed / section.students_started) * 100
         : 0;
       
+      const displaySection = maskSectionName(section.section, index);
+      
       return `
         <tr style="cursor:pointer;" onclick="openSectionModal('${section.section.replace(/'/g, "\\'")}')">
-          <td>${section.section}</td>
+          <td>${displaySection}</td>
           <td data-value="${section.students_started}">
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="progress-bar" style="width:80px;">
