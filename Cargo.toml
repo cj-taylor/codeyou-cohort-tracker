@@ -21,7 +21,7 @@ chrono = "0.4"
 async-trait = "0.1"
 async-stream = "0.3"
 futures-util = "0.3"
-self_update = "0.41"
+self_update = "0.42"
 dirs = "5.0"
 
 [dev-dependencies]
